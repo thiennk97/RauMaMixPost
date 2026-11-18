@@ -188,7 +188,7 @@ function renderStickerCanvas(
   }
 
   // Sugar / Ice
-  ctx.font = labelW <= 320 ? '19px Arial, sans-serif' : '21px Arial, sans-serif';
+  ctx.font = labelW <= 320 ? 'bold 19px Arial, sans-serif' : 'bold 21px Arial, sans-serif';
   ctx.fillText(`${sticker.sugar} đường · ${sticker.ice} đá`, pad, y);
   y += labelW <= 320 ? 22 : 24;
 
@@ -204,14 +204,14 @@ function renderStickerCanvas(
 
   // Note
   if (sticker.note && y < height - 30) {
-    ctx.font = labelW <= 320 ? 'italic 17px Arial, sans-serif' : 'italic 19px Arial, sans-serif';
+    ctx.font = labelW <= 320 ? 'bold italic 17px Arial, sans-serif' : 'bold italic 19px Arial, sans-serif';
     ctx.fillText(`* ${sticker.note}`, pad, y);
   }
 
   // Footer
   const footY = height - 26;
   ctx.fillRect(pad, footY - 4, maxW, 1);
-  ctx.font = '18px Arial, sans-serif';
+  ctx.font = 'bold 17px Arial, sans-serif';
   ctx.fillText(order.orderType || 'Mang về', pad, footY);
   const timeStr = new Date(order.createdAt || Date.now()).toLocaleTimeString('vi-VN', {
     hour: '2-digit',
@@ -223,6 +223,8 @@ function renderStickerCanvas(
 
   return { canvas, widthMm, heightMm };
 }
+
+const LUM_THRESHOLD = 210;
 
 function canvasToTsplCommand(canvas, widthMm, heightMm) {
   const width = canvas.width;
@@ -238,7 +240,7 @@ function canvasToTsplCommand(canvas, widthMm, heightMm) {
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
       const lum = (imgData[idx] + imgData[idx + 1] + imgData[idx + 2]) / 3;
-      if (lum < 165) {
+      if (lum < LUM_THRESHOLD) {
         const byteIdx = y * widthBytes + (x >> 3);
         bitmap[byteIdx] &= ~(0x80 >> (x & 7));
       }
@@ -247,7 +249,7 @@ function canvasToTsplCommand(canvas, widthMm, heightMm) {
 
   const encoder = new TextEncoder();
   const header = encoder.encode(
-    `SIZE ${widthMm} mm,${heightMm} mm\r\nGAP 2 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\nBITMAP 0,0,${widthBytes},${height},0,`
+    `SIZE ${widthMm} mm,${heightMm} mm\r\nGAP 2 mm,0 mm\r\nSPEED 3\r\nDENSITY 12\r\nDIRECTION 1\r\nCLS\r\nBITMAP 0,0,${widthBytes},${height},0,`
   );
   const footer = encoder.encode(`\r\nPRINT 1,1\r\n`);
 
@@ -277,9 +279,8 @@ function canvasToEscPosCommand(canvas, bandHeight = 48) {
     for (let y = 0; y < h; y++) {
       const srcY = startY + y;
       for (let x = 0; x < width; x++) {
-        const idx = (srcY * width + x) * 4;
-        const lum = (imgData[idx] + imgData[idx + 1] + imgData[idx + 2]) / 3;
-        if (lum < 165) {
+        const lum = (imgData[srcY * width * 4 + x * 4] + imgData[srcY * width * 4 + x * 4 + 1] + imgData[srcY * width * 4 + x * 4 + 2]) / 3;
+        if (lum < LUM_THRESHOLD) {
           band[y * widthBytes + (x >> 3)] |= 0x80 >> (x & 7);
         }
       }
