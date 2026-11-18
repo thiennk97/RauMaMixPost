@@ -657,8 +657,15 @@ function ensureSeeded() {
   return ss;
 }
 
+function formatDateKey(val) {
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
+  }
+  return String(val || '').slice(0, 10);
+}
+
 function getOrderSheetName(dateKey) {
-  return 'Orders_' + String(dateKey).slice(0, 7).replace('-', '_');
+  return 'Orders_' + formatDateKey(dateKey).slice(0, 7).replace('-', '_');
 }
 
 function appendOrderRow(ss, o) {
@@ -795,7 +802,7 @@ function doPost(e) {
         'total', 'status', 'itemsJSON', 'note'
       ]);
       const rows = readSheetObjects(sh);
-      const todayCount = rows.filter(r => String(r.dateKey).slice(0, 10) === dateKey).length;
+      const todayCount = rows.filter(r => formatDateKey(r.dateKey) === dateKey).length;
       const items = body.items || [];
       const subtotal = items.reduce((s, it) => s + Number(it.unitPrice) * Number(it.quantity), 0);
       const order = {
