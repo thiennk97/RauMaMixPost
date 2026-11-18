@@ -1,0 +1,857 @@
+{
+  "categories": [
+    {
+      "id": "cat-1",
+      "name": "Rau má đậu xanh sữa dừa"
+    },
+    {
+      "id": "cat-2",
+      "name": "Rau má sầu riêng"
+    },
+    {
+      "id": "cat-3",
+      "name": "Rau má khoai môn sữa dừa"
+    },
+    {
+      "id": "cat-4",
+      "name": "Combo"
+    },
+    {
+      "id": "cat-5",
+      "name": "Rau má nước dừa xiêm"
+    },
+    {
+      "id": "cat-6",
+      "name": "Rau má nguyên chất"
+    },
+    {
+      "id": "cat-7",
+      "name": "Nước dừa xiêm"
+    },
+    {
+      "id": "cat-8",
+      "name": "TRÀ TRÁI CÂY"
+    },
+    {
+      "id": "cat-9",
+      "name": "Trà bí đao"
+    }
+  ],
+  "sizes": [
+    {
+      "id": "sz-m",
+      "name": "Size M",
+      "shortName": "M",
+      "extraPrice": 0
+    },
+    {
+      "id": "sz-l",
+      "name": "Size L",
+      "shortName": "L",
+      "extraPrice": 5000
+    }
+  ],
+  "products": [
+    {
+      "id": "ITEM-PZC3",
+      "name": "Rau má đậu xanh sữa dừa",
+      "category": "Rau má đậu xanh sữa dừa",
+      "price": 25000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 25000,
+        "Shopee": 30000,
+        "Grab": 30000,
+        "Be": 30000,
+        "Xanh": 30000
+      }
+    },
+    {
+      "id": "ITEM-64TC",
+      "name": "Rau má đậu xanh sữa dừa thạch lá dứa",
+      "category": "Rau má đậu xanh sữa dừa",
+      "price": 30000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 30000,
+        "Shopee": 35000,
+        "Grab": 35000,
+        "Be": 35000,
+        "Xanh": 35000
+      }
+    },
+    {
+      "id": "ITEM-PILV",
+      "name": "Rau má đậu xanh sữa dừa nha đam",
+      "category": "Rau má đậu xanh sữa dừa",
+      "price": 30000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 30000,
+        "Shopee": 36000,
+        "Grab": 36000,
+        "Be": 36000,
+        "Xanh": 36000
+      }
+    },
+    {
+      "id": "ITEM-EKW7",
+      "name": "Rau má sầu riêng sữa dừa tươi",
+      "category": "Rau má sầu riêng",
+      "price": 33000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 33000,
+        "Shopee": 35000,
+        "Grab": 35000,
+        "Be": 35000,
+        "Xanh": 35000
+      }
+    },
+    {
+      "id": "ITEM-85QV",
+      "name": "Rau má khoai môn sầu riêng sữa dừa tươi",
+      "category": "Rau má sầu riêng",
+      "price": 35000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 35000,
+        "Shopee": 40000,
+        "Grab": 40000,
+        "Be": 40000,
+        "Xanh": 40000
+      }
+    },
+    {
+      "id": "ITEM-CXQ6",
+      "name": "Rau má đậu xanh sầu riêng",
+      "category": "Rau má sầu riêng",
+      "price": 35000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 35000,
+        "Shopee": 40000,
+        "Grab": 40000,
+        "Be": 40000,
+        "Xanh": 40000
+      }
+    },
+    {
+      "id": "ITEM-5F7W",
+      "name": "Rau má khoai môn sữa dừa",
+      "category": "Rau má khoai môn sữa dừa",
+      "price": 28000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 28000,
+        "Shopee": 33000,
+        "Grab": 33000,
+        "Be": 33000,
+        "Xanh": 33000
+      }
+    },
+    {
+      "id": "ITEM-X7PK",
+      "name": "Rau má khoai môn sữa dừa nha đam",
+      "category": "Rau má khoai môn sữa dừa",
+      "price": 33000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 33000,
+        "Shopee": 39000,
+        "Grab": 39000,
+        "Be": 39000,
+        "Xanh": 39000
+      }
+    },
+    {
+      "id": "ITEM-FK9Q",
+      "name": "Rau má khoai môn sữa dừa thạch lá dứa",
+      "category": "Rau má khoai môn sữa dừa",
+      "price": 33000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 33000,
+        "Shopee": 38000,
+        "Grab": 38000,
+        "Be": 38000,
+        "Xanh": 38000
+      }
+    },
+    {
+      "id": "ITEM-YDZ2",
+      "name": "Combo 1 rau má đậu xanh sữa dừa nha đam đậu đỏ trân châu",
+      "category": "Combo",
+      "price": 38000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 38000,
+        "Shopee": 43000,
+        "Grab": 43000,
+        "Be": 43000,
+        "Xanh": 43000
+      }
+    },
+    {
+      "id": "ITEM-4800",
+      "name": "Combo 2 rau má khoai môn sữa dừa nha đam trân châu thạch lá dứa",
+      "category": "Combo",
+      "price": 40000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 40000,
+        "Shopee": 43000,
+        "Grab": 43000,
+        "Be": 43000,
+        "Xanh": 43000
+      }
+    },
+    {
+      "id": "ITEM-OY8P",
+      "name": "Rau má dừa xiêm",
+      "category": "Rau má nước dừa xiêm",
+      "price": 30000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 30000,
+        "Shopee": 37000,
+        "Grab": 37000,
+        "Be": 37000,
+        "Xanh": 37000
+      }
+    },
+    {
+      "id": "ITEM-TR85",
+      "name": "Rau má dừa xiêm Nha đam",
+      "category": "Rau má nước dừa xiêm",
+      "price": 35000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 35000,
+        "Shopee": 43000,
+        "Grab": 43000,
+        "Be": 43000,
+        "Xanh": 43000
+      }
+    },
+    {
+      "id": "ITEM-GRSD",
+      "name": "Rau má nguyên chất nha đam",
+      "category": "Rau má nguyên chất",
+      "price": 25000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 25000,
+        "Shopee": 30000,
+        "Grab": 30000,
+        "Be": 30000,
+        "Xanh": 30000
+      }
+    },
+    {
+      "id": "ITEM-4WBH",
+      "name": "Rau má sữa dừa",
+      "category": "Rau má nguyên chất",
+      "price": 25000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 25000,
+        "Shopee": 28000,
+        "Grab": 28000,
+        "Be": 28000,
+        "Xanh": 28000
+      }
+    },
+    {
+      "id": "ITEM-GWDD",
+      "name": "Rau má nguyên chất",
+      "category": "Rau má nguyên chất",
+      "price": 18000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 18000,
+        "Shopee": 20000,
+        "Grab": 20000,
+        "Be": 20000,
+        "Xanh": 20000
+      }
+    },
+    {
+      "id": "ITEM-MOGW",
+      "name": "Nước dừa xiêm hạt chia (L)",
+      "category": "Nước dừa xiêm",
+      "price": 50000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 50000,
+        "Shopee": 55000,
+        "Grab": 55000,
+        "Be": 55000,
+        "Xanh": 55000
+      }
+    },
+    {
+      "id": "ITEM-P6ZL",
+      "name": "Nước dừa xiêm hạt đác hạt chia (L)",
+      "category": "Nước dừa xiêm",
+      "price": 58000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 58000,
+        "Shopee": 65000,
+        "Grab": 65000,
+        "Be": 65000,
+        "Xanh": 65000
+      }
+    },
+    {
+      "id": "ITEM-RBST",
+      "name": "Nước dừa xiêm thạch dừa (L)",
+      "category": "Nước dừa xiêm",
+      "price": 55000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 55000,
+        "Shopee": 63000,
+        "Grab": 63000,
+        "Be": 63000,
+        "Xanh": 63000
+      }
+    },
+    {
+      "id": "ITEM-YN8A",
+      "name": "Nước dừa xiêm nha đam (L)",
+      "category": "Nước dừa xiêm",
+      "price": 53000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 53000,
+        "Shopee": 63000,
+        "Grab": 63000,
+        "Be": 63000,
+        "Xanh": 63000
+      }
+    },
+    {
+      "id": "ITEM-13N3",
+      "name": "Nước dừa xiêm nha đam hạt chia (L)",
+      "category": "Nước dừa xiêm",
+      "price": 50000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 50000,
+        "Shopee": 63000,
+        "Grab": 63000,
+        "Be": 63000,
+        "Xanh": 63000
+      }
+    },
+    {
+      "id": "ITEM-6LF3",
+      "name": "Nước dừa xiêm trân châu (L)",
+      "category": "Nước dừa xiêm",
+      "price": 55000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 55000,
+        "Shopee": 60000,
+        "Grab": 60000,
+        "Be": 60000,
+        "Xanh": 60000
+      }
+    },
+    {
+      "id": "ITEM-P51Y",
+      "name": "Nước dừa xiêm hạt sen (L)",
+      "category": "Nước dừa xiêm",
+      "price": 65000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 65000,
+        "Shopee": 68000,
+        "Grab": 68000,
+        "Be": 68000,
+        "Xanh": 68000
+      }
+    },
+    {
+      "id": "ITEM-V0UU",
+      "name": "Trà mãng cầu tươi (M)",
+      "category": "TRÀ TRÁI CÂY",
+      "price": 35000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 35000,
+        "Shopee": 40000,
+        "Grab": 40000,
+        "Be": 40000,
+        "Xanh": 40000
+      }
+    },
+    {
+      "id": "ITEM-SIQ4",
+      "name": "Trà mãng cầu tươi (L)",
+      "category": "TRÀ TRÁI CÂY",
+      "price": 40000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 40000,
+        "Shopee": 40000,
+        "Grab": 40000,
+        "Be": 40000,
+        "Xanh": 40000
+      }
+    },
+    {
+      "id": "ITEM-SCHB",
+      "name": "Trà trái cây nhiệt đới (M)",
+      "category": "TRÀ TRÁI CÂY",
+      "price": 33000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 33000,
+        "Shopee": 40000,
+        "Grab": 40000,
+        "Be": 40000,
+        "Xanh": 40000
+      }
+    },
+    {
+      "id": "ITEM-KAH5",
+      "name": "Trà trái cây nhiệt đới (L)",
+      "category": "TRÀ TRÁI CÂY",
+      "price": 38000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 38000,
+        "Shopee": 40000,
+        "Grab": 40000,
+        "Be": 40000,
+        "Xanh": 40000
+      }
+    },
+    {
+      "id": "ITEM-Y8IP",
+      "name": "Trà bí đao sương sáo hạt chia",
+      "category": "Trà bí đao",
+      "price": 25000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 25000,
+        "Shopee": 30000,
+        "Grab": 30000,
+        "Be": 30000,
+        "Xanh": 30000
+      }
+    },
+    {
+      "id": "ITEM-X6DU",
+      "name": "Trà bí đao sương sáo yến mạch",
+      "category": "Trà bí đao",
+      "price": 35000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 35000,
+        "Shopee": 35000,
+        "Grab": 35000,
+        "Be": 35000,
+        "Xanh": 35000
+      }
+    },
+    {
+      "id": "ITEM-SR8Q",
+      "name": "Trà đào",
+      "category": "Trà bí đao",
+      "price": 30000,
+      "active": true
+    },
+    {
+      "id": "ITEM-0O9X",
+      "name": "Trà bí đao sữa sương sáo hạt chia",
+      "category": "Trà bí đao",
+      "price": 33000,
+      "active": true,
+      "channelPrices": {
+        "Mang về": 33000,
+        "Shopee": 35000,
+        "Grab": 35000,
+        "Be": 35000,
+        "Xanh": 35000
+      }
+    },
+    {
+      "id": "ITEM-VK47",
+      "name": "Trà sâm thảo dược (L)",
+      "category": "Trà bí đao",
+      "price": 33000,
+      "active": true
+    },
+    {
+      "id": "ITEM-AU8C",
+      "name": "Trà sâm thảo dược (M)",
+      "category": "Trà bí đao",
+      "price": 25000,
+      "active": true
+    }
+  ],
+  "toppings": [
+    {
+      "id": "ITEM-YYIE",
+      "name": "Thạch Dừa",
+      "price": 8000,
+      "active": true
+    },
+    {
+      "id": "ITEM-UT0A",
+      "name": "Thạch Lá Dứa",
+      "price": 8000,
+      "active": true
+    },
+    {
+      "id": "ITEM-LPJ9",
+      "name": "Trân Châu Trắng",
+      "price": 8000,
+      "active": true
+    },
+    {
+      "id": "ITEM-HEE4",
+      "name": "Thạch Củ Năng",
+      "price": 6000,
+      "active": true
+    },
+    {
+      "id": "ITEM-EXMV",
+      "name": "Nha Đam Tươi",
+      "price": 8000,
+      "active": true
+    },
+    {
+      "id": "ITEM-0NYC",
+      "name": "Đậu đỏ",
+      "price": 8000,
+      "active": true
+    },
+    {
+      "id": "ITEM-VJ3C",
+      "name": "Thạch Khoai Môn",
+      "price": 10000,
+      "active": true
+    },
+    {
+      "id": "ITEM-0NP3",
+      "name": "Đậu Xanh",
+      "price": 10000,
+      "active": true
+    },
+    {
+      "id": "ITEM-PUS5",
+      "name": "Hạt đác",
+      "price": 12000,
+      "active": true
+    },
+    {
+      "id": "ITEM-XOYQ",
+      "name": "Yến mạch",
+      "price": 10000,
+      "active": true
+    },
+    {
+      "id": "ITEM-Q2XY",
+      "name": "Sương sáo",
+      "price": 8000,
+      "active": true
+    },
+    {
+      "id": "ITEM-QJ4Z",
+      "name": "Trân châu củ năng",
+      "price": 12000,
+      "active": true
+    },
+    {
+      "id": "ITEM-NKYK",
+      "name": "Trân châu dừa non",
+      "price": 12000,
+      "active": true
+    },
+    {
+      "id": "ITEM-LJF5",
+      "name": "Hạt sen",
+      "price": 12000,
+      "active": true
+    },
+    {
+      "id": "ITEM-JZUN",
+      "name": "Khúc bạch khoai môn sữa",
+      "price": 10000,
+      "active": true
+    }
+  ],
+  "orders": [
+    {
+      "id": "7adf1af0-1877-461f-ad83-7a3a3cd152a0",
+      "orderCode": "#004",
+      "createdAt": "2026-11-18T04:08:01.317Z",
+      "dateKey": "2026-11-18",
+      "orderType": "Shopee",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-YN8A|L|100%|100%||",
+          "productId": "ITEM-YN8A",
+          "productName": "Nước dừa xiêm nha đam (L)",
+          "size": "L",
+          "sizeExtra": 5000,
+          "sugar": "100%",
+          "ice": "100%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 58000,
+          "quantity": 2
+        }
+      ],
+      "subtotal": 116000,
+      "discount": 0,
+      "total": 116000,
+      "cashReceived": 116000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "completed"
+    },
+    {
+      "id": "ea219f7f-b1e4-4efb-8205-8bcb4d097132",
+      "orderCode": "#002",
+      "createdAt": "2026-11-18T07:10:23.138Z",
+      "dateKey": "2026-11-18",
+      "orderType": "Grab",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-P6ZL|M|100%|100%||",
+          "productId": "ITEM-P6ZL",
+          "productName": "Nước dừa xiêm hạt đác hạt chia (L)",
+          "size": "M",
+          "sizeExtra": 0,
+          "sugar": "100%",
+          "ice": "100%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 65000,
+          "quantity": 1
+        }
+      ],
+      "subtotal": 65000,
+      "discount": 0,
+      "total": 65000,
+      "cashReceived": 65000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "completed"
+    },
+    {
+      "id": "eb1b6b9c-847f-4358-9ea5-d902f27209d2",
+      "orderCode": "#003",
+      "createdAt": "2026-11-18T07:11:15.866Z",
+      "dateKey": "2026-11-18",
+      "orderType": "Grab",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-PZC3|L|30%|100%||",
+          "productId": "ITEM-PZC3",
+          "productName": "Rau má đậu xanh sữa dừa",
+          "size": "L",
+          "sizeExtra": 5000,
+          "sugar": "30%",
+          "ice": "100%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 35000,
+          "quantity": 1
+        },
+        {
+          "key": "ITEM-GWDD|L|30%|0%||",
+          "productId": "ITEM-GWDD",
+          "productName": "Rau má nguyên chất",
+          "size": "L",
+          "sizeExtra": 5000,
+          "sugar": "30%",
+          "ice": "0%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 25000,
+          "quantity": 1
+        }
+      ],
+      "subtotal": 60000,
+      "discount": 0,
+      "total": 60000,
+      "cashReceived": 60000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "completed"
+    },
+    {
+      "id": "b71ce564-9e02-4db1-9406-292548b98d63",
+      "orderCode": "#004",
+      "createdAt": "2026-11-18T07:11:49.318Z",
+      "dateKey": "2026-11-18",
+      "orderType": "Mang về",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-MOGW|M|100%|100%||",
+          "productId": "ITEM-MOGW",
+          "productName": "Nước dừa xiêm hạt chia (L)",
+          "size": "M",
+          "sizeExtra": 0,
+          "sugar": "100%",
+          "ice": "100%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 50000,
+          "quantity": 1
+        },
+        {
+          "key": "ITEM-YN8A|M|100%|100%||",
+          "productId": "ITEM-YN8A",
+          "productName": "Nước dừa xiêm nha đam (L)",
+          "size": "M",
+          "sizeExtra": 0,
+          "sugar": "100%",
+          "ice": "100%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 53000,
+          "quantity": 1
+        }
+      ],
+      "subtotal": 103000,
+      "discount": 0,
+      "total": 103000,
+      "cashReceived": 103000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "completed"
+    },
+    {
+      "id": "6a5905ad-9a2a-4814-ae49-929b021edad4",
+      "orderCode": "#005",
+      "createdAt": "2026-11-18T07:13:07.382Z",
+      "dateKey": "2026-11-18",
+      "orderType": "Shopee",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-GWDD|L|0%|70%|ITEM-EXMV,ITEM-UT0A|",
+          "productId": "ITEM-GWDD",
+          "productName": "Rau má nguyên chất",
+          "size": "L",
+          "sizeExtra": 5000,
+          "sugar": "0%",
+          "ice": "70%",
+          "toppings": [
+            {
+              "id": "ITEM-EXMV",
+              "name": "Nha Đam Tươi",
+              "price": 8000
+            },
+            {
+              "id": "ITEM-UT0A",
+              "name": "Thạch Lá Dứa",
+              "price": 8000
+            }
+          ],
+          "note": "",
+          "unitPrice": 41000,
+          "quantity": 1
+        },
+        {
+          "key": "ITEM-OY8P|L|100%|70%|ITEM-LPJ9|",
+          "productId": "ITEM-OY8P",
+          "productName": "Rau má dừa xiêm",
+          "size": "L",
+          "sizeExtra": 5000,
+          "sugar": "100%",
+          "ice": "70%",
+          "toppings": [
+            {
+              "id": "ITEM-LPJ9",
+              "name": "Trân Châu Trắng",
+              "price": 8000
+            }
+          ],
+          "note": "",
+          "unitPrice": 50000,
+          "quantity": 1
+        }
+      ],
+      "subtotal": 91000,
+      "discount": 0,
+      "total": 91000,
+      "cashReceived": 91000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "completed"
+    },
+    {
+      "id": "1209745f-3956-49a9-92dc-681e97936f63",
+      "orderCode": "#006",
+      "createdAt": "2026-11-18T07:13:36.127Z",
+      "dateKey": "2026-11-18",
+      "orderType": "Shopee",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-YN8A|M|100%|100%||",
+          "productId": "ITEM-YN8A",
+          "productName": "Nước dừa xiêm nha đam (L)",
+          "size": "M",
+          "sizeExtra": 0,
+          "sugar": "100%",
+          "ice": "100%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 63000,
+          "quantity": 2
+        }
+      ],
+      "subtotal": 126000,
+      "discount": 0,
+      "total": 126000,
+      "cashReceived": 126000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "completed"
+    },
+    {
+      "id": "1a8e123a-7f16-417b-ba56-88c01db13169",
+      "orderCode": "#007",
+      "createdAt": "2026-11-18T07:13:54.456Z",
+      "dateKey": "2026-11-18",
+      "orderType": "Shopee",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-PZC3|L|100%|30%||",
+          "productId": "ITEM-PZC3",
+          "productName": "Rau má đậu xanh sữa dừa",
+          "size": "L",
+          "sizeExtra": 5000,
+          "sugar": "100%",
+          "ice": "30%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 35000,
+          "quantity": 1
+        }
+      ],
+      "subtotal": 35000,
+      "discount": 0,
+      "total": 35000,
+      "cashReceived": 35000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "completed"
+    }
+  ]
+}
