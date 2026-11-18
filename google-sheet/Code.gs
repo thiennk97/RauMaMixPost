@@ -729,7 +729,7 @@ function getRevenuePayload(ss, from, to) {
     const sh = ss.getSheetByName(name);
     if (!sh) return;
     readSheetObjects(sh).forEach(r => {
-      const dk = String(r.dateKey).slice(0, 10);
+      const dk = formatDateKey(r.dateKey);
       if (dk >= from && dk <= to) {
         rangeOrders.push({
           id: String(r.id),
