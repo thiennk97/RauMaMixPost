@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue';
-import { ShoppingBag, BarChart3, UtensilsCrossed, Usb, Printer } from 'lucide-vue-next';
-import { api } from './api.js';
+import { ShoppingBag, BarChart3, Usb, Printer } from 'lucide-vue-next';
+import { api, formatVnd } from './api.js';
 import {
   isWebUsbSupported,
   connectUsbPrinter,
@@ -16,14 +16,16 @@ import {
 } from './usbPrinter.js';
 import PosView from './components/PosView.vue';
 import RevenueView from './components/RevenueView.vue';
-import MenuView from './components/MenuView.vue';
 import LabelPrinter from './components/LabelPrinter.vue';
+import ShiftModal from './components/ShiftModal.vue';
 
 const activeTab = ref('pos');
 const categories = ref([]);
 const sizes = ref([]);
 const products = ref([]);
 const toppings = ref([]);
+const currentShift = ref(null);
+const showShiftModal = ref(false);
 const labelSize = ref(localStorage.getItem('labelSize') || '40x30');
 
 function setLabelSize(sz) {
@@ -68,6 +70,24 @@ async function loadMenu() {
   } catch (err) {
     console.error(err);
   }
+}
+
+async function loadCurrentShift() {
+  try {
+    const res = await api.getCurrentShift();
+    currentShift.value = res.shift || null;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function openShiftModal() {
+  await loadCurrentShift();
+  showShiftModal.value = true;
+}
+
+function handleShiftUpdated(shift) {
+  currentShift.value = shift || null;
 }
 
 async function handleConnectUsb() {
@@ -133,6 +153,7 @@ async function triggerPrint(order, previewOnly = false) {
 }
 
 function handleOrderCreated({ order, shouldPrint }) {
+  loadCurrentShift();
   if (shouldPrint) {
     triggerPrint(order, false);
   }
@@ -173,6 +194,7 @@ async function printFromPreview() {
 
 onMounted(async () => {
   loadMenu();
+  loadCurrentShift();
   await autoReconnectUsbPrinter();
   usbPrinterName.value = getConnectedPrinterName();
 });
@@ -192,9 +214,6 @@ onMounted(async () => {
         </button>
         <button class="nav-tab" :class="{ active: activeTab === 'revenue' }" @click="activeTab = 'revenue'">
           <BarChart3 :size="16" /> Doanh thu
-        </button>
-        <button class="nav-tab" :class="{ active: activeTab === 'menu' }" @click="activeTab = 'menu'">
-          <UtensilsCrossed :size="16" /> Quản lý món
         </button>
       </nav>
 
@@ -269,19 +288,23 @@ onMounted(async () => {
       :sizes="sizes"
       :products="products"
       :toppings="toppings"
+      :current-shift="currentShift"
       @order-created="handleOrderCreated"
+      @open-shift="openShiftModal"
     />
     <RevenueView
-      v-else-if="activeTab === 'revenue'"
-      @reprint-order="handleReprintOrder"
-    />
-    <MenuView
       v-else
-      :categories="categories"
-      :products="products"
-      @refresh="loadMenu"
+      @reprint-order="handleReprintOrder"
+      @order-cancelled="loadCurrentShift"
     />
   </div>
+
+  <ShiftModal
+    :show="showShiftModal"
+    :current-shift="currentShift"
+    @close="showShiftModal = false"
+    @updated="handleShiftUpdated"
+  />
 
   <LabelPrinter
     :order="activePrintOrder"

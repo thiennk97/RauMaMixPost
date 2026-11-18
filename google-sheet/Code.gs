@@ -668,14 +668,38 @@ function getOrderSheetName(dateKey) {
   return 'Orders_' + formatDateKey(dateKey).slice(0, 7).replace('-', '_');
 }
 
+const ORDER_HEADERS = [
+  'id', 'orderCode', 'createdAt', 'dateKey', 'orderType', 'paymentMethod',
+  'total', 'status', 'itemsJSON', 'note', 'shiftId'
+];
+
+const SHIFT_HEADERS = [
+  'id', 'dateKey', 'shiftName', 'openedBy', 'openedAt', 'openingCash',
+  'closedBy', 'closedAt', 'actualCash', 'expectedCash', 'cashDiff',
+  'totalOrders', 'cancelledOrders', 'totalRevenue', 'byPaymentJSON',
+  'byOrderTypeJSON', 'note', 'status'
+];
+
+function ensureSheetHeaders(sh, headers) {
+  if (sh.getLastRow() === 0) {
+    sh.appendRow(headers);
+    return;
+  }
+  const existing = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  headers.forEach(h => {
+    if (existing.indexOf(h) === -1) {
+      sh.getRange(1, sh.getLastColumn() + 1).setValue(h);
+      existing.push(h);
+    }
+  });
+}
+
 function appendOrderRow(ss, o) {
-  const sh = getOrCreateSheet(ss, getOrderSheetName(o.dateKey), [
-    'id', 'orderCode', 'createdAt', 'dateKey', 'orderType', 'paymentMethod',
-    'total', 'status', 'itemsJSON', 'note'
-  ]);
+  const sh = getOrCreateSheet(ss, getOrderSheetName(o.dateKey), ORDER_HEADERS);
+  ensureSheetHeaders(sh, ORDER_HEADERS);
   sh.appendRow([
     o.id, o.orderCode, o.createdAt, o.dateKey, o.orderType, o.paymentMethod,
-    o.total, o.status, JSON.stringify(o.items), o.note || ''
+    o.total, o.status, JSON.stringify(o.items), o.note || '', o.shiftId || ''
   ]);
 }
 
@@ -722,7 +746,91 @@ function getMonthSheetNamesBetween(from, to) {
   return names;
 }
 
-function getRevenuePayload(ss, from, to) {
+function serializeShift(r) {
+  return {
+    id: String(r.id),
+    dateKey: formatDateKey(r.dateKey),
+    shiftName: String(r.shiftName || ''),
+    openedBy: String(r.openedBy || ''),
+    openedAt: String(r.openedAt || ''),
+    openingCash: Number(r.openingCash) || 0,
+    closedBy: String(r.closedBy || ''),
+    closedAt: String(r.closedAt || ''),
+    actualCash: r.actualCash === '' || r.actualCash === undefined ? null : Number(r.actualCash),
+    expectedCash: Number(r.expectedCash) || 0,
+    cashDiff: Number(r.cashDiff) || 0,
+    totalOrders: Number(r.totalOrders) || 0,
+    cancelledOrders: Number(r.cancelledOrders) || 0,
+    totalRevenue: Number(r.totalRevenue) || 0,
+    byPaymentMethod: r.byPaymentJSON ? JSON.parse(r.byPaymentJSON) : {},
+    byOrderType: r.byOrderTypeJSON ? JSON.parse(r.byOrderTypeJSON) : {},
+    note: String(r.note || ''),
+    status: String(r.status || 'open')
+  };
+}
+
+function computeShiftStats(ss, shift) {
+  const today = Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
+  const from = shift.dateKey || today;
+  const to = today >= from ? today : from;
+  const sheetNames = getMonthSheetNamesBetween(from, to);
+  let totalOrders = 0;
+  let cancelledOrders = 0;
+  let totalRevenue = 0;
+  const byPaymentMethod = {};
+  const byOrderType = {};
+
+  sheetNames.forEach(name => {
+    const sh = ss.getSheetByName(name);
+    if (!sh) return;
+    readSheetObjects(sh).forEach(r => {
+      if (String(r.shiftId || '') !== shift.id) return;
+      if (String(r.status || 'completed') === 'cancelled') {
+        cancelledOrders++;
+        return;
+      }
+      const total = Number(r.total) || 0;
+      const pm = String(r.paymentMethod || 'Tiền mặt');
+      const ot = String(r.orderType || 'Mang về');
+      totalOrders++;
+      totalRevenue += total;
+      byPaymentMethod[pm] = (byPaymentMethod[pm] || 0) + total;
+      byOrderType[ot] = (byOrderType[ot] || 0) + total;
+    });
+  });
+
+  const cashSales = byPaymentMethod['Tiền mặt'] || 0;
+  const expectedCash = (Number(shift.openingCash) || 0) + cashSales;
+  return {
+    ...shift,
+    totalOrders,
+    cancelledOrders,
+    totalRevenue,
+    byPaymentMethod,
+    byOrderType,
+    expectedCash
+  };
+}
+
+function getCurrentShift(ss) {
+  const sh = getOrCreateSheet(ss, 'Shifts', SHIFT_HEADERS);
+  ensureSheetHeaders(sh, SHIFT_HEADERS);
+  const rows = readSheetObjects(sh).map(serializeShift);
+  const openShift = rows.find(s => s.status === 'open');
+  return openShift ? computeShiftStats(ss, openShift) : null;
+}
+
+function getShiftsInRange(ss, from, to) {
+  const sh = getOrCreateSheet(ss, 'Shifts', SHIFT_HEADERS);
+  ensureSheetHeaders(sh, SHIFT_HEADERS);
+  return readSheetObjects(sh)
+    .map(serializeShift)
+    .filter(s => s.dateKey >= from && s.dateKey <= to)
+    .map(s => (s.status === 'open' ? computeShiftStats(ss, s) : s))
+    .sort((a, b) => new Date(b.openedAt) - new Date(a.openedAt));
+}
+
+function getRevenuePayload(ss, from, to, shiftId) {
   const sheetNames = getMonthSheetNamesBetween(from, to);
   let rangeOrders = [];
   sheetNames.forEach(name => {
@@ -741,11 +849,16 @@ function getRevenuePayload(ss, from, to) {
           total: Number(r.total) || 0,
           status: String(r.status || 'completed'),
           items: JSON.parse(r.itemsJSON || '[]'),
-          note: String(r.note || '')
+          note: String(r.note || ''),
+          shiftId: String(r.shiftId || '')
         });
       }
     });
   });
+
+  if (shiftId) {
+    rangeOrders = rangeOrders.filter(o => o.shiftId === shiftId);
+  }
 
   const completed = rangeOrders.filter(o => o.status !== 'cancelled');
   let totalRevenue = 0, totalCups = 0;
@@ -766,12 +879,13 @@ function getRevenuePayload(ss, from, to) {
   rangeOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   return {
-    from, to, totalRevenue,
+    from, to, shiftId: shiftId || '', totalRevenue,
     orderCount: completed.length,
     cancelledCount: rangeOrders.length - completed.length,
     totalCups,
     avgOrderValue: completed.length ? Math.round(totalRevenue / completed.length) : 0,
-    byPaymentMethod, byOrderType, topProducts, orders: rangeOrders
+    byPaymentMethod, byOrderType, topProducts, orders: rangeOrders,
+    shifts: getShiftsInRange(ss, from, to)
   };
 }
 
@@ -779,9 +893,14 @@ function doGet(e) {
   const ss = ensureSeeded();
   const action = (e && e.parameter && e.parameter.action) || 'menu';
   if (action === 'menu') return jsonOut(getMenuPayload(ss));
+  if (action === 'currentShift') return jsonOut({ shift: getCurrentShift(ss) });
+  if (action === 'shifts') {
+    const today = Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
+    return jsonOut({ shifts: getShiftsInRange(ss, e.parameter.from || today, e.parameter.to || today) });
+  }
   if (action === 'revenue') {
     const today = Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
-    return jsonOut(getRevenuePayload(ss, e.parameter.from || today, e.parameter.to || today));
+    return jsonOut(getRevenuePayload(ss, e.parameter.from || today, e.parameter.to || today, e.parameter.shiftId || ''));
   }
   return jsonOut({ ok: true });
 }
@@ -794,13 +913,113 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents || '{}');
     const action = body.action;
 
-    if (action === 'createOrder') {
+    if (action === 'openShift') {
+      const existing = getCurrentShift(ss);
+      if (existing) {
+        return jsonOut({ error: `Đang có ca "${existing.shiftName}" chưa đóng. Vui lòng chốt ca trước khi mở ca mới.` });
+      }
       const now = new Date();
       const dateKey = Utilities.formatDate(now, 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
-      const sh = getOrCreateSheet(ss, getOrderSheetName(dateKey), [
-        'id', 'orderCode', 'createdAt', 'dateKey', 'orderType', 'paymentMethod',
-        'total', 'status', 'itemsJSON', 'note'
+      const sh = getOrCreateSheet(ss, 'Shifts', SHIFT_HEADERS);
+      ensureSheetHeaders(sh, SHIFT_HEADERS);
+      const todayShifts = readSheetObjects(sh).filter(r => formatDateKey(r.dateKey) === dateKey).length;
+      const shift = {
+        id: 'SH-' + dateKey.replace(/-/g, '') + '-' + String(todayShifts + 1).padStart(2, '0'),
+        dateKey,
+        shiftName: String(body.shiftName || 'Ca sáng').trim(),
+        openedBy: String(body.openedBy || '').trim(),
+        openedAt: now.toISOString(),
+        openingCash: Number(body.openingCash) || 0,
+        closedBy: '',
+        closedAt: '',
+        actualCash: null,
+        expectedCash: Number(body.openingCash) || 0,
+        cashDiff: 0,
+        totalOrders: 0,
+        cancelledOrders: 0,
+        totalRevenue: 0,
+        byPaymentMethod: {},
+        byOrderType: {},
+        note: '',
+        status: 'open'
+      };
+      sh.appendRow([
+        shift.id, shift.dateKey, shift.shiftName, shift.openedBy, shift.openedAt, shift.openingCash,
+        '', '', '', shift.expectedCash, 0,
+        0, 0, 0, '{}', '{}', '', 'open'
       ]);
+      return jsonOut({ shift });
+    }
+
+    if (action === 'closeShift') {
+      const sh = getOrCreateSheet(ss, 'Shifts', SHIFT_HEADERS);
+      ensureSheetHeaders(sh, SHIFT_HEADERS);
+      const vals = sh.getDataRange().getValues();
+      const headers = vals[0].map(String);
+      const idCol = headers.indexOf('id');
+      const statusCol = headers.indexOf('status');
+
+      let targetRow = -1;
+      let targetObj = null;
+      for (let r = 1; r < vals.length; r++) {
+        const matchesId = body.id ? String(vals[r][idCol]) === String(body.id) : true;
+        if (matchesId && String(vals[r][statusCol]) === 'open') {
+          targetRow = r + 1;
+          const obj = {};
+          headers.forEach((h, i) => obj[h] = vals[r][i]);
+          targetObj = serializeShift(obj);
+          break;
+        }
+      }
+      if (!targetObj) {
+        return jsonOut({ error: 'Không tìm thấy ca đang mở để chốt.' });
+      }
+
+      const stats = computeShiftStats(ss, targetObj);
+      const now = new Date();
+      const actualCash = body.actualCash === '' || body.actualCash === undefined || body.actualCash === null
+        ? stats.expectedCash
+        : Number(body.actualCash);
+      const cashDiff = actualCash - stats.expectedCash;
+      const closedShift = {
+        ...stats,
+        closedBy: String(body.closedBy || '').trim(),
+        closedAt: now.toISOString(),
+        actualCash,
+        cashDiff,
+        note: String(body.note || '').trim(),
+        status: 'closed'
+      };
+
+      const setCol = (colName, value) => {
+        const idx = headers.indexOf(colName);
+        if (idx !== -1) sh.getRange(targetRow, idx + 1).setValue(value);
+      };
+      setCol('closedBy', closedShift.closedBy);
+      setCol('closedAt', closedShift.closedAt);
+      setCol('actualCash', closedShift.actualCash);
+      setCol('expectedCash', closedShift.expectedCash);
+      setCol('cashDiff', closedShift.cashDiff);
+      setCol('totalOrders', closedShift.totalOrders);
+      setCol('cancelledOrders', closedShift.cancelledOrders);
+      setCol('totalRevenue', closedShift.totalRevenue);
+      setCol('byPaymentJSON', JSON.stringify(closedShift.byPaymentMethod));
+      setCol('byOrderTypeJSON', JSON.stringify(closedShift.byOrderType));
+      setCol('note', closedShift.note);
+      setCol('status', 'closed');
+
+      return jsonOut({ shift: closedShift });
+    }
+
+    if (action === 'createOrder') {
+      const currentShift = getCurrentShift(ss);
+      if (!currentShift) {
+        return jsonOut({ error: 'Chưa mở ca làm việc. Vui lòng bấm "Mở ca" trước khi tạo đơn!' });
+      }
+      const now = new Date();
+      const dateKey = Utilities.formatDate(now, 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
+      const sh = getOrCreateSheet(ss, getOrderSheetName(dateKey), ORDER_HEADERS);
+      ensureSheetHeaders(sh, ORDER_HEADERS);
       const rows = readSheetObjects(sh);
       const todayCount = rows.filter(r => formatDateKey(r.dateKey) === dateKey).length;
       const items = body.items || [];
@@ -815,7 +1034,8 @@ function doPost(e) {
         items,
         total: subtotal,
         note: body.note || '',
-        status: 'completed'
+        status: 'completed',
+        shiftId: currentShift.id
       };
       appendOrderRow(ss, order);
       return jsonOut(order);

@@ -912,6 +912,90 @@
       "changeAmount": 0,
       "note": "",
       "status": "completed"
+    },
+    {
+      "id": "cdb826b7-f923-476d-a81f-9736c1ce98c6",
+      "orderCode": "#001",
+      "createdAt": "2026-11-18T17:28:17.329Z",
+      "dateKey": "2026-11-19",
+      "orderType": "Mang về",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-PILV|M|100%|100%||",
+          "productId": "ITEM-PILV",
+          "productName": "Rau má đậu xanh sữa dừa nha đam",
+          "size": "M",
+          "sizeExtra": 0,
+          "sugar": "100%",
+          "ice": "100%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 30000,
+          "quantity": 1
+        }
+      ],
+      "subtotal": 30000,
+      "discount": 0,
+      "total": 30000,
+      "cashReceived": 30000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "completed",
+      "shiftId": "SH-20261119-01"
+    },
+    {
+      "id": "dbc317df-a185-42f9-9a25-4d2e1fa297cb",
+      "orderCode": "#002",
+      "createdAt": "2026-11-18T17:28:20.288Z",
+      "dateKey": "2026-11-19",
+      "orderType": "Mang về",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-PILV|M|100%|100%||",
+          "productId": "ITEM-PILV",
+          "productName": "Rau má đậu xanh sữa dừa nha đam",
+          "size": "M",
+          "sizeExtra": 0,
+          "sugar": "100%",
+          "ice": "100%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 30000,
+          "quantity": 1
+        }
+      ],
+      "subtotal": 30000,
+      "discount": 0,
+      "total": 30000,
+      "cashReceived": 30000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "cancelled",
+      "shiftId": "SH-20261119-01"
+    }
+  ],
+  "shifts": [
+    {
+      "id": "SH-20261119-01",
+      "dateKey": "2026-11-19",
+      "shiftName": "Ca sáng",
+      "openedBy": "h",
+      "openedAt": "2026-11-18T17:28:08.704Z",
+      "openingCash": 0,
+      "closedBy": "",
+      "closedAt": "",
+      "actualCash": null,
+      "expectedCash": 0,
+      "cashDiff": 0,
+      "totalOrders": 0,
+      "cancelledOrders": 0,
+      "totalRevenue": 0,
+      "byPaymentMethod": {},
+      "byOrderType": {},
+      "note": "",
+      "status": "open"
     }
   ]
 }

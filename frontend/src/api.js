@@ -88,13 +88,33 @@ export const api = {
     getGasUrl()
       ? gasPost({ action: 'cancelOrder', id })
       : requestLocal(`/orders/${id}/cancel`, { method: 'PATCH' }),
-  getRevenue: (from, to) => {
+  getCurrentShift: () =>
+    getGasUrl() ? gasGet({ action: 'currentShift' }) : requestLocal('/shifts/current'),
+  getShifts: (from, to) => {
     if (getGasUrl()) {
-      return gasGet({ action: 'revenue', from, to });
+      return gasGet({ action: 'shifts', from, to });
     }
     const params = new URLSearchParams();
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    return requestLocal(`/shifts?${params.toString()}`);
+  },
+  openShift: (payload) =>
+    getGasUrl()
+      ? gasPost({ action: 'openShift', ...payload })
+      : requestLocal('/shifts/open', { method: 'POST', body: JSON.stringify(payload) }),
+  closeShift: (payload) =>
+    getGasUrl()
+      ? gasPost({ action: 'closeShift', ...payload })
+      : requestLocal('/shifts/close', { method: 'POST', body: JSON.stringify(payload) }),
+  getRevenue: (from, to, shiftId = '') => {
+    if (getGasUrl()) {
+      return gasGet({ action: 'revenue', from, to, ...(shiftId ? { shiftId } : {}) });
+    }
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    if (shiftId) params.set('shiftId', shiftId);
     return requestLocal(`/revenue?${params.toString()}`);
   }
 };

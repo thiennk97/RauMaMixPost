@@ -91,6 +91,9 @@ function normalizeDb(db) {
   if (!Array.isArray(db.sizes) || !db.sizes.length) {
     db.sizes = [...DEFAULT_SIZES];
   }
+  if (!Array.isArray(db.shifts)) {
+    db.shifts = [];
+  }
   db.products = (db.products || []).map((p) => ({
     ...p,
     price: p.price != null ? Number(p.price) : Number(p.priceM || 0)

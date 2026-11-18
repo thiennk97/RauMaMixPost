@@ -120,6 +120,108 @@ app.get('/api/orders', (req, res) => {
   res.json(orders);
 });
 
+function computeLocalShiftStats(db, shift) {
+  const shiftOrders = (db.orders || []).filter((o) => o.shiftId === shift.id);
+  const completed = shiftOrders.filter((o) => o.status !== 'cancelled');
+  const byPaymentMethod = {};
+  const byOrderType = {};
+  let totalRevenue = 0;
+
+  for (const o of completed) {
+    totalRevenue += o.total;
+    byPaymentMethod[o.paymentMethod] = (byPaymentMethod[o.paymentMethod] || 0) + o.total;
+    byOrderType[o.orderType] = (byOrderType[o.orderType] || 0) + o.total;
+  }
+
+  const cashSales = byPaymentMethod['Tiền mặt'] || 0;
+  return {
+    ...shift,
+    totalOrders: completed.length,
+    cancelledOrders: shiftOrders.length - completed.length,
+    totalRevenue,
+    byPaymentMethod,
+    byOrderType,
+    expectedCash: (Number(shift.openingCash) || 0) + cashSales
+  };
+}
+
+// --- SHIFTS ---
+app.get('/api/shifts/current', (_req, res) => {
+  const db = readDb();
+  const openShift = db.shifts.find((s) => s.status === 'open');
+  res.json({ shift: openShift ? computeLocalShiftStats(db, openShift) : null });
+});
+
+app.get('/api/shifts', (req, res) => {
+  const db = readDb();
+  const today = getLocalDateKey();
+  const from = String(req.query.from || today);
+  const to = String(req.query.to || today);
+  const shifts = db.shifts
+    .filter((s) => s.dateKey >= from && s.dateKey <= to)
+    .map((s) => (s.status === 'open' ? computeLocalShiftStats(db, s) : s))
+    .sort((a, b) => new Date(b.openedAt) - new Date(a.openedAt));
+  res.json({ shifts });
+});
+
+app.post('/api/shifts/open', (req, res) => {
+  const db = readDb();
+  const existing = db.shifts.find((s) => s.status === 'open');
+  if (existing) {
+    return res.status(400).json({ error: `Đang có ca "${existing.shiftName}" chưa đóng. Vui lòng chốt ca trước khi mở ca mới.` });
+  }
+  const now = new Date();
+  const dateKey = getLocalDateKey(now);
+  const todayCount = db.shifts.filter((s) => s.dateKey === dateKey).length;
+  const shift = {
+    id: `SH-${dateKey.replace(/-/g, '')}-${String(todayCount + 1).padStart(2, '0')}`,
+    dateKey,
+    shiftName: String(req.body?.shiftName || 'Ca sáng').trim(),
+    openedBy: String(req.body?.openedBy || '').trim(),
+    openedAt: now.toISOString(),
+    openingCash: Number(req.body?.openingCash) || 0,
+    closedBy: '',
+    closedAt: '',
+    actualCash: null,
+    expectedCash: Number(req.body?.openingCash) || 0,
+    cashDiff: 0,
+    totalOrders: 0,
+    cancelledOrders: 0,
+    totalRevenue: 0,
+    byPaymentMethod: {},
+    byOrderType: {},
+    note: '',
+    status: 'open'
+  };
+  db.shifts.push(shift);
+  writeDb(db);
+  res.status(201).json({ shift });
+});
+
+app.post('/api/shifts/close', (req, res) => {
+  const db = readDb();
+  const idx = db.shifts.findIndex((s) => (req.body?.id ? s.id === req.body.id : true) && s.status === 'open');
+  if (idx === -1) {
+    return res.status(404).json({ error: 'Không tìm thấy ca đang mở để chốt.' });
+  }
+  const stats = computeLocalShiftStats(db, db.shifts[idx]);
+  const actualCash = req.body?.actualCash === '' || req.body?.actualCash === undefined || req.body?.actualCash === null
+    ? stats.expectedCash
+    : Number(req.body.actualCash);
+  const closedShift = {
+    ...stats,
+    closedBy: String(req.body?.closedBy || '').trim(),
+    closedAt: new Date().toISOString(),
+    actualCash,
+    cashDiff: actualCash - stats.expectedCash,
+    note: String(req.body?.note || '').trim(),
+    status: 'closed'
+  };
+  db.shifts[idx] = closedShift;
+  writeDb(db);
+  res.json({ shift: closedShift });
+});
+
 app.post('/api/orders', (req, res) => {
   const { items, orderType, paymentMethod, discount = 0, cashReceived = 0, note = '' } = req.body;
   if (!Array.isArray(items) || items.length === 0) {
@@ -127,6 +229,10 @@ app.post('/api/orders', (req, res) => {
   }
 
   const db = readDb();
+  const currentShift = db.shifts.find((s) => s.status === 'open');
+  if (!currentShift) {
+    return res.status(400).json({ error: 'Chưa mở ca làm việc. Vui lòng bấm "Mở ca" trước khi tạo đơn!' });
+  }
   const now = new Date();
   const dateKey = getLocalDateKey(now);
   const subtotal = items.reduce((sum, item) => sum + Number(item.unitPrice) * Number(item.quantity), 0);
@@ -148,7 +254,8 @@ app.post('/api/orders', (req, res) => {
     cashReceived: paymentMethod === 'Tiền mặt' ? safeCash : total,
     changeAmount: paymentMethod === 'Tiền mặt' ? Math.max(0, safeCash - total) : 0,
     note: String(note || '').trim(),
-    status: 'completed'
+    status: 'completed',
+    shiftId: currentShift.id
   };
 
   db.orders.push(order);
@@ -171,8 +278,12 @@ app.get('/api/revenue', (req, res) => {
   const today = getLocalDateKey();
   const from = String(req.query.from || today);
   const to = String(req.query.to || today);
+  const shiftId = String(req.query.shiftId || '');
 
-  const rangeOrders = db.orders.filter((o) => o.dateKey >= from && o.dateKey <= to);
+  let rangeOrders = db.orders.filter((o) => o.dateKey >= from && o.dateKey <= to);
+  if (shiftId) {
+    rangeOrders = rangeOrders.filter((o) => o.shiftId === shiftId);
+  }
   const completedOrders = rangeOrders.filter((o) => o.status !== 'cancelled');
   const cancelledCount = rangeOrders.length - completedOrders.length;
 
@@ -210,9 +321,15 @@ app.get('/api/revenue', (req, res) => {
   const recentOrders = [...rangeOrders]
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
+  const shifts = db.shifts
+    .filter((s) => s.dateKey >= from && s.dateKey <= to)
+    .map((s) => (s.status === 'open' ? computeLocalShiftStats(db, s) : s))
+    .sort((a, b) => new Date(b.openedAt) - new Date(a.openedAt));
+
   res.json({
     from,
     to,
+    shiftId,
     totalRevenue,
     orderCount: completedOrders.length,
     cancelledCount,
@@ -222,7 +339,8 @@ app.get('/api/revenue', (req, res) => {
     byOrderType,
     topProducts,
     dailySeries,
-    orders: recentOrders
+    orders: recentOrders,
+    shifts
   });
 });
 

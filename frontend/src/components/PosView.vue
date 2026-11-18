@@ -1,16 +1,17 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Search, Plus, Minus, Trash2, Printer, CheckCircle2, X } from 'lucide-vue-next';
+import { Search, Plus, Minus, Trash2, Printer, CheckCircle2, X, Play, Lock } from 'lucide-vue-next';
 import { api, formatVnd } from '../api.js';
 
 const props = defineProps({
   categories: { type: Array, default: () => [] },
   sizes: { type: Array, default: () => [] },
   products: { type: Array, default: () => [] },
-  toppings: { type: Array, default: () => [] }
+  toppings: { type: Array, default: () => [] },
+  currentShift: { type: Object, default: null }
 });
 
-const emit = defineEmits(['order-created']);
+const emit = defineEmits(['order-created', 'open-shift']);
 
 const CHANNELS = [
   { id: 'Mang về', label: 'Mang về', color: '#15803d' },
@@ -202,6 +203,10 @@ function clearCart() {
 
 async function submitOrder(shouldPrint = true) {
   if (!cart.value.length || submitting.value) return;
+  if (!props.currentShift) {
+    emit('open-shift');
+    return;
+  }
   submitting.value = true;
   try {
     const order = await api.createOrder({
@@ -307,6 +312,34 @@ async function submitOrder(shouldPrint = true) {
 
     <!-- Cart Panel -->
     <aside class="panel cart-panel">
+      <div
+        style="padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px"
+        :style="currentShift ? { background: '#f0fdf4' } : { background: '#fef3c7' }"
+      >
+        <div style="font-size: 13px; font-weight: 600" :style="currentShift ? { color: '#166534' } : { color: '#92400e' }">
+          <template v-if="currentShift">
+            {{ currentShift.shiftName }} · {{ formatVnd(currentShift.totalRevenue) }} ({{ currentShift.totalOrders }} đơn)
+          </template>
+          <template v-else>
+            Chưa mở ca làm việc
+          </template>
+        </div>
+        <button
+          v-if="!currentShift"
+          class="btn btn-primary btn-sm"
+          @click="emit('open-shift')"
+        >
+          <Play :size="14" /> Mở ca
+        </button>
+        <button
+          v-else
+          class="btn btn-danger-soft btn-sm"
+          @click="emit('open-shift')"
+        >
+          <Lock :size="14" /> Chốt ca
+        </button>
+      </div>
+
       <div class="cart-header">
         <h2>Đơn {{ orderType }} ({{ totalCups }} ly)</h2>
         <button v-if="cart.length" class="btn btn-outline btn-sm" @click="clearCart">
@@ -327,7 +360,7 @@ async function submitOrder(shouldPrint = true) {
           @click="submitOrder(true)"
         >
           <Printer :size="20" />
-          {{ submitting ? 'Đang xử lý...' : 'Thanh toán & In tem' }}
+          {{ submitting ? 'Đang xử lý...' : currentShift ? 'Thanh toán & In tem' : 'Mở ca để thanh toán' }}
         </button>
       </div>
 
