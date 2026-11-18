@@ -241,6 +241,10 @@ if (fs.existsSync(FRONTEND_DIST)) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`Raumamix POS backend running at http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Raumamix POS backend running at http://localhost:${PORT}`);
+  });
+}
+
+export default app;
