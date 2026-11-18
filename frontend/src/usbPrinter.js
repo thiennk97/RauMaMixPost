@@ -166,31 +166,31 @@ function renderStickerCanvas(
   const pad = labelW <= 320 ? 10 : 12;
   const rightPad = labelW <= 320 && !rotate180 ? 22 : pad;
   const maxW = labelW - pad - rightPad;
-  let y = 8;
+  let y = 6;
 
   // Header
-  ctx.font = labelW <= 320 ? 'bold 18px Arial, sans-serif' : 'bold 20px Arial, sans-serif';
+  ctx.font = labelW <= 320 ? 'bold 20px Arial, sans-serif' : 'bold 22px Arial, sans-serif';
   ctx.fillText('RAU MÁ MIX', pad, y);
   const codeText = `${order.orderCode} (${indexText})`;
   const codeW = ctx.measureText(codeText).width;
   ctx.fillText(codeText, labelW - rightPad - codeW, y);
-  y += labelW <= 320 ? 22 : 26;
+  y += labelW <= 320 ? 23 : 26;
 
   ctx.fillRect(pad, y, maxW, 2);
-  y += 6;
+  y += 5;
 
   // Drink Name + Size
-  ctx.font = labelW <= 320 ? 'bold 20px Arial, sans-serif' : 'bold 22px Arial, sans-serif';
+  ctx.font = labelW <= 320 ? 'bold 23px Arial, sans-serif' : 'bold 26px Arial, sans-serif';
   const titleLines = wrapLines(ctx, `${sticker.productName} (${sticker.size})`, maxW).slice(0, 2);
   for (const ln of titleLines) {
     ctx.fillText(ln, pad, y);
-    y += labelW <= 320 ? 23 : 25;
+    y += labelW <= 320 ? 26 : 28;
   }
 
   // Sugar / Ice
-  ctx.font = labelW <= 320 ? '17px Arial, sans-serif' : '18px Arial, sans-serif';
+  ctx.font = labelW <= 320 ? '19px Arial, sans-serif' : '21px Arial, sans-serif';
   ctx.fillText(`${sticker.sugar} đường · ${sticker.ice} đá`, pad, y);
-  y += labelW <= 320 ? 20 : 22;
+  y += labelW <= 320 ? 22 : 24;
 
   // Toppings
   if (sticker.toppings?.length) {
@@ -198,20 +198,20 @@ function renderStickerCanvas(
     const tpLines = wrapLines(ctx, tpStr, maxW).slice(0, 2);
     for (const ln of tpLines) {
       ctx.fillText(ln, pad, y);
-      y += labelW <= 320 ? 19 : 21;
+      y += labelW <= 320 ? 21 : 23;
     }
   }
 
   // Note
   if (sticker.note && y < height - 30) {
-    ctx.font = labelW <= 320 ? 'italic 15px Arial, sans-serif' : 'italic 17px Arial, sans-serif';
+    ctx.font = labelW <= 320 ? 'italic 17px Arial, sans-serif' : 'italic 19px Arial, sans-serif';
     ctx.fillText(`* ${sticker.note}`, pad, y);
   }
 
   // Footer
-  const footY = height - 24;
+  const footY = height - 26;
   ctx.fillRect(pad, footY - 4, maxW, 1);
-  ctx.font = labelW <= 320 ? '16px Arial, sans-serif' : '16px Arial, sans-serif';
+  ctx.font = '18px Arial, sans-serif';
   ctx.fillText(order.orderType || 'Mang về', pad, footY);
   const timeStr = new Date(order.createdAt || Date.now()).toLocaleTimeString('vi-VN', {
     hour: '2-digit',
