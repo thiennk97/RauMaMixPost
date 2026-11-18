@@ -1,6 +1,6 @@
 const BASE = '/api';
 const DEFAULT_GAS_URL =
-  'https://script.google.com/macros/s/AKfycbzo5nHeL2tvEesp0GJQSOmY2CWCSPDL2sWxwizFtwHQvaZyzWL_U_hmYJccKASHGP3P/exec';
+  'https://script.google.com/macros/s/AKfycbxn4AaOgAyHeLShYN_R-CY0uWhilQC6Vi4-GQ1EzdtBRGQO1lcpKUmAo1JuWoVVsrbU/exec';
 
 export function getGasUrl() {
   const saved = (localStorage.getItem('gasUrl') || import.meta.env.VITE_GAS_URL || '').trim();
