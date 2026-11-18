@@ -852,6 +852,66 @@
       "changeAmount": 0,
       "note": "",
       "status": "completed"
+    },
+    {
+      "id": "f315b138-4232-4762-8b18-7f4505e41006",
+      "orderCode": "#008",
+      "createdAt": "2026-11-18T07:46:38.700Z",
+      "dateKey": "2026-11-18",
+      "orderType": "Grab",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-PZC3|M|100%|100%||",
+          "productId": "ITEM-PZC3",
+          "productName": "Rau má đậu xanh sữa dừa",
+          "size": "M",
+          "sizeExtra": 0,
+          "sugar": "100%",
+          "ice": "100%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 30000,
+          "quantity": 1
+        }
+      ],
+      "subtotal": 30000,
+      "discount": 0,
+      "total": 30000,
+      "cashReceived": 30000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "completed"
+    },
+    {
+      "id": "655ec0b0-3ab6-43a8-abe8-e3439943da4c",
+      "orderCode": "#009",
+      "createdAt": "2026-11-18T07:49:52.982Z",
+      "dateKey": "2026-11-18",
+      "orderType": "Mang về",
+      "paymentMethod": "Tiền mặt",
+      "items": [
+        {
+          "key": "ITEM-PZC3|L|100%|0%||",
+          "productId": "ITEM-PZC3",
+          "productName": "Rau má đậu xanh sữa dừa",
+          "size": "L",
+          "sizeExtra": 5000,
+          "sugar": "100%",
+          "ice": "0%",
+          "toppings": [],
+          "note": "",
+          "unitPrice": 30000,
+          "quantity": 1
+        }
+      ],
+      "subtotal": 30000,
+      "discount": 0,
+      "total": 30000,
+      "cashReceived": 30000,
+      "changeAmount": 0,
+      "note": "",
+      "status": "completed"
     }
   ]
 }

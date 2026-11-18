@@ -107,11 +107,10 @@ async function triggerPrint(order, previewOnly = false) {
   if (!previewOnly && printMode.value === 'bridge') {
     try {
       await printOrderViaBridge(order, labelSize.value, getUsbOpts(), usbProtocol.value);
-      return;
     } catch (err) {
-      alert(`Lỗi APK Bridge: ${err.message}`);
-      return;
+      console.warn('Bỏ qua in APK Bridge (không có máy in):', err.message);
     }
+    return;
   }
   if (!previewOnly && printMode.value === 'rawbt') {
     printOrderViaRawBt(order, labelSize.value, getUsbOpts());
@@ -122,7 +121,8 @@ async function triggerPrint(order, previewOnly = false) {
       await printOrderViaUsb(order, labelSize.value, usbProtocol.value, getUsbOpts());
       return;
     } catch (err) {
-      alert(`Lỗi in USB (${err.message}). Đang chuyển sang hộp thoại in Chrome...`);
+      console.warn('Bỏ qua in WebUSB (không có máy in):', err.message);
+      return;
     }
   }
   showLabelPreview.value = previewOnly;
