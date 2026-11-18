@@ -106,9 +106,23 @@ const changeAmount = computed(() => {
   return Math.max(0, (Number(cashReceived.value) || 0) - cartTotal.value);
 });
 
+function isDefaultSizeL(product) {
+  if (!product) return false;
+  const name = (product.name || '').toLowerCase();
+  const cat = (product.category || '').toLowerCase();
+  return /\(\s*l\s*\)/i.test(name) || cat.includes('trà bí đao') || name.includes('trà bí đao');
+}
+
+const modalSizes = computed(() => {
+  if (isDefaultSizeL(editingProduct.value)) {
+    return [{ id: 'sz-l-default', name: 'Size L (Mặc định)', shortName: 'L', extraPrice: 0, locked: true }];
+  }
+  return availableSizes.value;
+});
+
 function openCustomize(product) {
   editingProduct.value = product;
-  optSizeObj.value = availableSizes.value[0];
+  optSizeObj.value = modalSizes.value[0];
   optSugar.value = '100%';
   optIce.value = '100%';
   optToppings.value = [];
@@ -368,14 +382,14 @@ async function submitOrder(shouldPrint = true) {
       </div>
 
       <div class="option-section">
-        <h4>Chọn Size (tính như topping thêm)</h4>
+        <h4>{{ modalSizes[0]?.locked ? 'Size mặc định' : 'Chọn Size (tính như topping thêm)' }}</h4>
         <div class="option-chips">
           <button
-            v-for="sz in availableSizes"
+            v-for="sz in modalSizes"
             :key="sz.id"
             class="chip"
             :class="{ active: optSizeObj?.id === sz.id }"
-            @click="optSizeObj = sz"
+            @click="!sz.locked && (optSizeObj = sz)"
           >
             {{ sz.name }} ({{ sz.extraPrice ? '+' + formatVnd(sz.extraPrice) : '+0đ' }})
           </button>
