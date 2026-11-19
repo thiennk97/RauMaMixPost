@@ -984,6 +984,30 @@
       "openedBy": "h",
       "openedAt": "2026-11-18T17:28:08.704Z",
       "openingCash": 0,
+      "closedBy": "h",
+      "closedAt": "2026-11-19T00:58:55.662Z",
+      "actualCash": 30000,
+      "expectedCash": 30000,
+      "cashDiff": 0,
+      "totalOrders": 1,
+      "cancelledOrders": 1,
+      "totalRevenue": 30000,
+      "byPaymentMethod": {
+        "Tiền mặt": 30000
+      },
+      "byOrderType": {
+        "Mang về": 30000
+      },
+      "note": "",
+      "status": "closed"
+    },
+    {
+      "id": "SH-20261119-02",
+      "dateKey": "2026-11-19",
+      "shiftName": "Ca sáng",
+      "openedBy": "",
+      "openedAt": "2026-11-19T00:58:59.478Z",
+      "openingCash": 0,
       "closedBy": "",
       "closedAt": "",
       "actualCash": null,

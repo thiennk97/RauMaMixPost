@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue';
-import { Search, Plus, Minus, Trash2, Printer, CheckCircle2, X, Play, Lock } from 'lucide-vue-next';
+import { Search, Plus, Minus, Trash2, Printer, CheckCircle2, X, Play, Lock, Loader2 } from 'lucide-vue-next';
 import { api, formatVnd } from '../api.js';
 
 const props = defineProps({
@@ -8,7 +8,9 @@ const props = defineProps({
   sizes: { type: Array, default: () => [] },
   products: { type: Array, default: () => [] },
   toppings: { type: Array, default: () => [] },
-  currentShift: { type: Object, default: null }
+  currentShift: { type: Object, default: null },
+  menuLoading: { type: Boolean, default: false },
+  shiftLoading: { type: Boolean, default: false }
 });
 
 const emit = defineEmits(['order-created', 'open-shift']);
@@ -155,7 +157,7 @@ const modalUnitPrice = computed(() => {
 });
 
 function addCustomizedToCart() {
-  if (!editingProduct.value) return;
+  if (!editingProduct.value || submitting.value) return;
   const sz = optSizeObj.value || availableSizes.value[0];
   const tpSorted = [...optToppings.value].sort((a, b) => a.id.localeCompare(b.id));
   const key = [
@@ -189,6 +191,7 @@ function addCustomizedToCart() {
 }
 
 function changeQty(idx, delta) {
+  if (submitting.value) return;
   const item = cart.value[idx];
   item.quantity += delta;
   if (item.quantity <= 0) {
@@ -197,27 +200,34 @@ function changeQty(idx, delta) {
 }
 
 function clearCart() {
+  if (submitting.value) return;
   cart.value = [];
   cashReceived.value = 0;
 }
 
 async function submitOrder(shouldPrint = true) {
-  if (!cart.value.length || submitting.value) return;
+  if (!cart.value.length || submitting.value || props.shiftLoading) return;
   if (!props.currentShift) {
     emit('open-shift');
     return;
   }
   submitting.value = true;
+  // Chốt lại kênh + danh sách món tại thời điểm bấm, tránh xóa nhầm giỏ nếu đổi kênh khi đang gửi
+  const channel = orderType.value;
+  const submittedItems = cart.value.map((it) => ({ ...it }));
+  const total = cartTotal.value;
   try {
     const order = await api.createOrder({
-      items: cart.value,
-      orderType: orderType.value,
+      items: submittedItems,
+      orderType: channel,
       paymentMethod: paymentMethod.value,
       cashReceived: paymentMethod.value === 'Tiền mặt' && cashReceived.value > 0
         ? cashReceived.value
-        : cartTotal.value
+        : total
     });
-    clearCart();
+    // Xóa đúng giỏ của kênh vừa gửi (kể cả khi đã chuyển sang kênh khác trong lúc chờ)
+    cartsByChannel.value[channel] = [];
+    if (channel === orderType.value) cashReceived.value = 0;
     toast.value = `Đã tạo đơn ${order.orderCode} (${formatVnd(order.total)})`;
     setTimeout(() => { toast.value = ''; }, 3500);
     emit('order-created', { order, shouldPrint });
@@ -277,7 +287,12 @@ async function submitOrder(shouldPrint = true) {
         {{ toast }}
       </div>
 
-      <div v-if="!groupedProducts.length" class="cart-empty">
+      <div v-if="menuLoading && !products.length" class="cart-empty">
+        <Loader2 :size="20" class="spin" style="vertical-align: middle; margin-right: 6px" />
+        Đang tải menu...
+      </div>
+
+      <div v-else-if="!groupedProducts.length" class="cart-empty">
         Không tìm thấy món nào phù hợp.
       </div>
 
@@ -317,7 +332,11 @@ async function submitOrder(shouldPrint = true) {
         :style="currentShift ? { background: '#f0fdf4' } : { background: '#fef3c7' }"
       >
         <div style="font-size: 13px; font-weight: 600" :style="currentShift ? { color: '#166534' } : { color: '#92400e' }">
-          <template v-if="currentShift">
+          <template v-if="shiftLoading && !currentShift">
+            <Loader2 :size="14" class="spin" style="vertical-align: middle; margin-right: 4px" />
+            Đang kiểm tra ca...
+          </template>
+          <template v-else-if="currentShift">
             {{ currentShift.shiftName }} · {{ formatVnd(currentShift.totalRevenue) }} ({{ currentShift.totalOrders }} đơn)
           </template>
           <template v-else>
@@ -327,6 +346,7 @@ async function submitOrder(shouldPrint = true) {
         <button
           v-if="!currentShift"
           class="btn btn-primary btn-sm"
+          :disabled="shiftLoading"
           @click="emit('open-shift')"
         >
           <Play :size="14" /> Mở ca
@@ -334,6 +354,8 @@ async function submitOrder(shouldPrint = true) {
         <button
           v-else
           class="btn btn-danger-soft btn-sm"
+          :disabled="submitting"
+          :title="submitting ? 'Đang gửi đơn, vui lòng chờ...' : ''"
           @click="emit('open-shift')"
         >
           <Lock :size="14" /> Chốt ca
@@ -342,7 +364,7 @@ async function submitOrder(shouldPrint = true) {
 
       <div class="cart-header">
         <h2>Đơn {{ orderType }} ({{ totalCups }} ly)</h2>
-        <button v-if="cart.length" class="btn btn-outline btn-sm" @click="clearCart">
+        <button v-if="cart.length" class="btn btn-outline btn-sm" :disabled="submitting" @click="clearCart">
           Xóa hết
         </button>
       </div>
@@ -356,11 +378,12 @@ async function submitOrder(shouldPrint = true) {
         <button
           class="btn btn-primary"
           style="width: 100%; padding: 13px 16px; font-size: 16px"
-          :disabled="!cart.length || submitting"
+          :disabled="!cart.length || submitting || shiftLoading"
           @click="submitOrder(true)"
         >
-          <Printer :size="20" />
-          {{ submitting ? 'Đang xử lý...' : currentShift ? 'Thanh toán & In tem' : 'Mở ca để thanh toán' }}
+          <Loader2 v-if="submitting" :size="20" class="spin" />
+          <Printer v-else :size="20" />
+          {{ submitting ? 'Đang tạo đơn...' : currentShift ? 'Thanh toán & In tem' : 'Mở ca để thanh toán' }}
         </button>
       </div>
 
@@ -368,7 +391,7 @@ async function submitOrder(shouldPrint = true) {
         Chưa có món nào.<br />Bấm vào món bên trái để chọn Size & Topping.
       </div>
 
-      <div class="cart-items" v-if="cart.length">
+      <div class="cart-items" :class="{ 'is-loading': submitting }" v-if="cart.length">
         <div v-for="(item, idx) in cart" :key="item.key" class="cart-item">
           <div class="cart-item-top">
             <div>
@@ -485,8 +508,11 @@ async function submitOrder(shouldPrint = true) {
           <b style="min-width: 22px; text-align: center">{{ optQty }}</b>
           <button class="qty-btn" @click="optQty++"><Plus :size="14" /></button>
         </div>
-        <button class="btn btn-primary" @click="addCustomizedToCart">
-          Thêm · {{ formatVnd(modalUnitPrice * optQty) }}
+        <button class="btn btn-primary" :disabled="submitting" @click="addCustomizedToCart">
+          <template v-if="submitting">
+            <Loader2 :size="14" class="spin" /> Đang gửi đơn trước...
+          </template>
+          <template v-else>Thêm · {{ formatVnd(modalUnitPrice * optQty) }}</template>
         </button>
       </div>
     </div>

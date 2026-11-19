@@ -26,6 +26,8 @@ const products = ref([]);
 const toppings = ref([]);
 const currentShift = ref(null);
 const showShiftModal = ref(false);
+const menuLoading = ref(true);
+const shiftLoading = ref(true);
 const labelSize = ref(localStorage.getItem('labelSize') || '40x30');
 
 function setLabelSize(sz) {
@@ -61,6 +63,7 @@ function getUsbOpts() {
 }
 
 async function loadMenu() {
+  menuLoading.value = true;
   try {
     const res = await api.getMenu();
     categories.value = res.categories || [];
@@ -69,24 +72,38 @@ async function loadMenu() {
     toppings.value = res.toppings || [];
   } catch (err) {
     console.error(err);
+  } finally {
+    menuLoading.value = false;
   }
 }
+
+// Chỉ áp dụng kết quả của lần gọi mới nhất, tránh response cũ ghi đè trạng thái mới (VD vừa chốt ca xong)
+let shiftRequestSeq = 0;
+let shiftPending = 0;
 
 async function loadCurrentShift() {
+  const seq = ++shiftRequestSeq;
+  shiftPending++;
+  shiftLoading.value = true;
   try {
     const res = await api.getCurrentShift();
-    currentShift.value = res.shift || null;
+    if (seq === shiftRequestSeq) currentShift.value = res.shift || null;
   } catch (err) {
     console.error(err);
+  } finally {
+    shiftPending--;
+    if (shiftPending === 0) shiftLoading.value = false;
   }
 }
 
-async function openShiftModal() {
-  await loadCurrentShift();
+function openShiftModal() {
   showShiftModal.value = true;
+  // Chỉ chốt ca mới cần số liệu mới nhất; mở ca chỉ là form nhập
+  if (currentShift.value) loadCurrentShift();
 }
 
 function handleShiftUpdated(shift) {
+  shiftRequestSeq++; // bỏ qua các response đang bay về (dữ liệu cũ)
   currentShift.value = shift || null;
 }
 
@@ -289,6 +306,8 @@ onMounted(async () => {
       :products="products"
       :toppings="toppings"
       :current-shift="currentShift"
+      :menu-loading="menuLoading"
+      :shift-loading="shiftLoading && !currentShift"
       @order-created="handleOrderCreated"
       @open-shift="openShiftModal"
     />
@@ -302,8 +321,10 @@ onMounted(async () => {
   <ShiftModal
     :show="showShiftModal"
     :current-shift="currentShift"
+    :refreshing="shiftLoading"
     @close="showShiftModal = false"
     @updated="handleShiftUpdated"
+    @refresh="loadCurrentShift"
   />
 
   <LabelPrinter

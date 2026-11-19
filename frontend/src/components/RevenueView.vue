@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted } from 'vue';
-import { Printer, RefreshCw, Ban } from 'lucide-vue-next';
+import { ref, computed, onMounted } from 'vue';
+import { Printer, RefreshCw, Ban, Loader2 } from 'lucide-vue-next';
 import { api, formatVnd, getTodayStr, shiftDateStr } from '../api.js';
 
 const emit = defineEmits(['reprint-order', 'order-cancelled']);
@@ -10,6 +10,8 @@ const toDate = ref(getTodayStr());
 const preset = ref('today');
 const selectedShiftId = ref('');
 const loading = ref(false);
+const cancellingId = ref('');
+const busy = computed(() => loading.value || Boolean(cancellingId.value));
 const data = ref({
   totalRevenue: 0,
   orderCount: 0,
@@ -23,18 +25,24 @@ const data = ref({
   shifts: []
 });
 
+// Chỉ áp dụng kết quả của lần lọc mới nhất
+let revenueSeq = 0;
+
 async function loadRevenue() {
+  const seq = ++revenueSeq;
   loading.value = true;
   try {
-    data.value = await api.getRevenue(fromDate.value, toDate.value, selectedShiftId.value);
+    const res = await api.getRevenue(fromDate.value, toDate.value, selectedShiftId.value);
+    if (seq === revenueSeq) data.value = res;
   } catch (err) {
-    alert(err.message);
+    if (seq === revenueSeq) alert(err.message);
   } finally {
-    loading.value = false;
+    if (seq === revenueSeq) loading.value = false;
   }
 }
 
 function applyPreset(key) {
+  if (busy.value) return;
   preset.value = key;
   selectedShiftId.value = '';
   const today = getTodayStr();
@@ -52,6 +60,7 @@ function applyPreset(key) {
 }
 
 function toggleShiftFilter(shiftId) {
+  if (busy.value) return;
   selectedShiftId.value = selectedShiftId.value === shiftId ? '' : shiftId;
   loadRevenue();
 }
@@ -63,14 +72,20 @@ function formatShiftLabel(s) {
 }
 
 async function cancelOrder(order) {
+  if (busy.value) return;
   if (!confirm(`Xác nhận hủy đơn ${order.orderCode} (${formatVnd(order.total)})?`)) return;
+  cancellingId.value = order.id;
   try {
     await api.cancelOrder(order.id);
-    await loadRevenue();
+    // Cập nhật ngay trên giao diện, tránh bấm hủy lần 2 trong lúc tải lại
+    order.status = 'cancelled';
     emit('order-cancelled');
   } catch (err) {
     alert(err.message);
+  } finally {
+    cancellingId.value = '';
   }
+  await loadRevenue();
 }
 
 function formatDateTime(iso) {
@@ -91,29 +106,31 @@ onMounted(loadRevenue);
     <!-- Filter Bar -->
     <div class="panel card-pad" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center">
       <div class="cat-pills">
-        <button class="pill" :class="{ active: preset === 'today' }" @click="applyPreset('today')">Hôm nay</button>
-        <button class="pill" :class="{ active: preset === '7d' }" @click="applyPreset('7d')">7 ngày</button>
-        <button class="pill" :class="{ active: preset === '30d' }" @click="applyPreset('30d')">30 ngày</button>
+        <button class="pill" :class="{ active: preset === 'today' }" :disabled="busy" @click="applyPreset('today')">Hôm nay</button>
+        <button class="pill" :class="{ active: preset === '7d' }" :disabled="busy" @click="applyPreset('7d')">7 ngày</button>
+        <button class="pill" :class="{ active: preset === '30d' }" :disabled="busy" @click="applyPreset('30d')">30 ngày</button>
       </div>
 
       <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
-        <select v-model="selectedShiftId" class="input-sm" style="width: auto; max-width: 260px" @change="loadRevenue">
+        <select v-model="selectedShiftId" class="input-sm" style="width: auto; max-width: 260px" :disabled="busy" @change="loadRevenue">
           <option value="">Tất cả các ca (cả ngày)</option>
           <option v-for="s in data.shifts || []" :key="s.id" :value="s.id">
             {{ formatShiftLabel(s) }}
           </option>
         </select>
-        <input v-model="fromDate" type="date" class="input-sm" style="width: auto" @change="preset = 'custom'; selectedShiftId = ''" />
+        <input v-model="fromDate" type="date" class="input-sm" style="width: auto" :disabled="busy" @change="preset = 'custom'; selectedShiftId = ''" />
         <span>→</span>
-        <input v-model="toDate" type="date" class="input-sm" style="width: auto" @change="preset = 'custom'; selectedShiftId = ''" />
-        <button class="btn btn-primary btn-sm" @click="loadRevenue" :disabled="loading">
-          <RefreshCw :size="14" /> Xem
+        <input v-model="toDate" type="date" class="input-sm" style="width: auto" :disabled="busy" @change="preset = 'custom'; selectedShiftId = ''" />
+        <button class="btn btn-primary btn-sm" @click="loadRevenue" :disabled="busy">
+          <Loader2 v-if="loading" :size="14" class="spin" />
+          <RefreshCw v-else :size="14" />
+          {{ loading ? 'Đang tải...' : 'Xem' }}
         </button>
       </div>
     </div>
 
     <!-- KPI Cards -->
-    <div class="kpi-grid">
+    <div class="kpi-grid" :class="{ 'is-loading': loading }">
       <div class="kpi-card">
         <div class="kpi-label">Tổng doanh thu</div>
         <div class="kpi-value green">{{ formatVnd(data.totalRevenue) }}</div>
@@ -133,7 +150,7 @@ onMounted(loadRevenue);
     </div>
 
     <!-- Breakdown -->
-    <div class="two-col">
+    <div class="two-col" :class="{ 'is-loading': loading }">
       <div class="panel card-pad">
         <h3 style="margin: 0 0 12px; font-size: 15px">Theo thanh toán & kênh bán</h3>
         <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px">
@@ -165,14 +182,14 @@ onMounted(loadRevenue);
     </div>
 
     <!-- Shifts Summary Table -->
-    <div v-if="(data.shifts || []).length" class="panel card-pad">
+    <div v-if="(data.shifts || []).length" class="panel card-pad" :class="{ 'is-loading': busy }">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px">
         <h3 style="margin: 0; font-size: 15px">Ca làm việc ({{ data.shifts.length }})</h3>
         <button v-if="selectedShiftId" class="btn btn-outline btn-sm" @click="toggleShiftFilter(selectedShiftId)">
           Xem tất cả ca
         </button>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap" :style="loading ? { opacity: 0.55 } : {}">
         <table>
           <thead>
             <tr>
@@ -227,7 +244,7 @@ onMounted(loadRevenue);
     <!-- Orders Table -->
     <div class="panel card-pad">
       <h3 style="margin: 0 0 12px; font-size: 15px">Danh sách đơn hàng ({{ data.orders.length }})</h3>
-      <div class="table-wrap">
+      <div class="table-wrap" :style="loading ? { opacity: 0.55 } : {}">
         <table>
           <thead>
             <tr>
@@ -267,10 +284,13 @@ onMounted(loadRevenue);
                   <button
                     v-if="o.status !== 'cancelled'"
                     class="btn btn-danger-soft btn-sm"
+                    :disabled="busy"
                     @click="cancelOrder(o)"
                     title="Hủy đơn (không tính vào doanh thu)"
                   >
-                    <Ban :size="14" /> Hủy đơn
+                    <Loader2 v-if="cancellingId === o.id" :size="14" class="spin" />
+                    <Ban v-else :size="14" />
+                    {{ cancellingId === o.id ? 'Đang hủy...' : 'Hủy đơn' }}
                   </button>
                 </div>
               </td>

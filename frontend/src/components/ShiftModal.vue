@@ -1,14 +1,15 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
-import { X, Play, Lock } from 'lucide-vue-next';
+import { X, Play, Lock, Loader2 } from 'lucide-vue-next';
 import { api, formatVnd } from '../api.js';
 
 const props = defineProps({
   show: Boolean,
-  currentShift: Object
+  currentShift: Object,
+  refreshing: Boolean
 });
 
-const emit = defineEmits(['close', 'updated']);
+const emit = defineEmits(['close', 'updated', 'refresh']);
 
 const SHIFT_PRESETS = ['Ca sáng', 'Ca chiều', 'Ca tối'];
 
@@ -20,17 +21,21 @@ const openingCash = ref(0);
 // Close shift form
 const closedBy = ref('');
 const actualCash = ref(0);
+const cashTouched = ref(false);
 const note = ref('');
 const submitting = ref(false);
 
 const isClosing = computed(() => Boolean(props.currentShift));
 
+// Reset form khi mở modal hoặc đổi sang ca khác
 watch(
-  () => [props.show, props.currentShift],
-  ([visible, shift]) => {
+  () => [props.show, props.currentShift?.id],
+  ([visible]) => {
     if (!visible) return;
+    const shift = props.currentShift;
     if (shift) {
       actualCash.value = Number(shift.expectedCash) || 0;
+      cashTouched.value = false;
       closedBy.value = shift.openedBy || '';
       note.value = '';
     } else {
@@ -41,6 +46,21 @@ watch(
   },
   { immediate: true }
 );
+
+// Số liệu ca được làm mới → cập nhật tiền dự kiến nếu nhân viên chưa tự nhập
+watch(
+  () => props.currentShift?.expectedCash,
+  (val) => {
+    if (props.show && props.currentShift && !cashTouched.value) {
+      actualCash.value = Number(val) || 0;
+    }
+  }
+);
+
+function closeModal() {
+  if (submitting.value) return;
+  emit('close');
+}
 
 const cashDiff = computed(() => {
   if (!props.currentShift) return 0;
@@ -74,13 +94,15 @@ async function handleOpenShift() {
     emit('close');
   } catch (err) {
     alert(err.message);
+    // VD: máy khác đã mở ca → tải lại trạng thái để chuyển sang chế độ chốt ca
+    emit('refresh');
   } finally {
     submitting.value = false;
   }
 }
 
 async function handleCloseShift() {
-  if (submitting.value || !props.currentShift) return;
+  if (submitting.value || props.refreshing || !props.currentShift) return;
   if (!confirm(`Xác nhận chốt và đóng "${props.currentShift.shiftName}"?`)) return;
   submitting.value = true;
   try {
@@ -101,11 +123,11 @@ async function handleCloseShift() {
 </script>
 
 <template>
-  <div v-if="show" class="modal-backdrop" @click.self="emit('close')">
+  <div v-if="show" class="modal-backdrop" @click.self="closeModal">
     <div class="modal" style="max-width: 480px; width: 95%">
       <div class="modal-header">
         <h3>{{ isClosing ? `Chốt ca: ${currentShift.shiftName}` : 'Mở ca làm việc' }}</h3>
-        <button class="btn btn-outline btn-sm" @click="emit('close')">
+        <button class="btn btn-outline btn-sm" :disabled="submitting" @click="closeModal">
           <X :size="16" />
         </button>
       </div>
@@ -140,13 +162,24 @@ async function handleCloseShift() {
         </div>
 
         <button class="btn btn-primary" :disabled="submitting" @click="handleOpenShift">
-          <Play :size="16" /> {{ submitting ? 'Đang mở ca...' : 'Bắt đầu ca làm' }}
+          <Loader2 v-if="submitting" :size="16" class="spin" />
+          <Play v-else :size="16" />
+          {{ submitting ? 'Đang mở ca...' : 'Bắt đầu ca làm' }}
         </button>
       </div>
 
       <!-- CLOSE SHIFT MODE -->
       <div v-else style="display: flex; flex-direction: column; gap: 12px; padding-top: 8px">
-        <div style="background: var(--bg-soft, #f8fafc); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px">
+        <div
+          v-if="refreshing"
+          style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px"
+        >
+          <Loader2 :size="14" class="spin" /> Đang cập nhật số liệu mới nhất của ca...
+        </div>
+        <div
+          :class="{ 'is-loading': refreshing }"
+          style="background: var(--bg-soft, #f8fafc); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px"
+        >
           <div class="summary-line">
             <span>Giờ mở ca</span>
             <b>{{ formatTime(currentShift.openedAt) }}</b>
@@ -191,7 +224,7 @@ async function handleCloseShift() {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
           <div>
             <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px">Tiền mặt thực tế đếm được</label>
-            <input v-model.number="actualCash" type="number" min="0" step="1000" class="input-sm" />
+            <input v-model.number="actualCash" type="number" min="0" step="1000" class="input-sm" :disabled="submitting" @input="cashTouched = true" />
             <div
               style="font-size: 12px; margin-top: 4px; font-weight: 600"
               :style="{ color: cashDiff === 0 ? '#16a34a' : cashDiff > 0 ? '#0284c7' : '#dc2626' }"
@@ -210,8 +243,15 @@ async function handleCloseShift() {
           <input v-model="note" class="input-sm" placeholder="VD: Đã cất tiền két, thiếu đá..." />
         </div>
 
-        <button class="btn btn-danger-soft" style="font-weight: 700; padding: 10px" :disabled="submitting" @click="handleCloseShift">
-          <Lock :size="16" /> {{ submitting ? 'Đang chốt ca...' : 'Xác nhận chốt & đóng ca' }}
+        <button
+          class="btn btn-danger-soft"
+          style="font-weight: 700; padding: 10px"
+          :disabled="submitting || refreshing"
+          @click="handleCloseShift"
+        >
+          <Loader2 v-if="submitting || refreshing" :size="16" class="spin" />
+          <Lock v-else :size="16" />
+          {{ submitting ? 'Đang chốt ca...' : refreshing ? 'Đang tải số liệu ca...' : 'Xác nhận chốt & đóng ca' }}
         </button>
       </div>
     </div>
