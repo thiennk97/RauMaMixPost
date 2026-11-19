@@ -303,42 +303,12 @@ function canvasToEscPosCommand(canvas, bandHeight = 48) {
   return full;
 }
 
-export async function printOrderViaUsb(order, labelSize = '40x30', protocol = 'escpos', opts = {}) {
-  const stickers = [];
-  for (const item of order.items || []) {
-    const qty = Number(item.quantity) || 1;
-    for (let i = 0; i < qty; i++) {
-      stickers.push({
-        productName: item.productName,
-        size: item.size,
-        sugar: item.sugar,
-        ice: item.ice,
-        toppings: item.toppings || [],
-        note: item.note || ''
-      });
-    }
-  }
-
-  const total = stickers.length;
-  for (let i = 0; i < total; i++) {
-    const targetW = labelSize === '40x30' ? 296 : 384;
-    const { canvas, widthMm, heightMm } = renderStickerCanvas(
-      stickers[i],
-      order,
-      `${i + 1}/${total}`,
-      labelSize,
-      opts,
-      targetW,
-      176
-    );
-    const cmd = protocol === 'tspl'
-      ? canvasToTsplCommand(canvas, widthMm, heightMm)
-      : canvasToEscPosCommand(canvas, 40);
-    await sendBytes(cmd);
-  }
+export async function printOrderViaUsb(order, labelSize = '40x30', _protocol = 'tspl', opts = {}) {
+  const bytes = buildOrderTsplBytes(order, labelSize, opts);
+  await sendBytes(bytes);
 }
 
-export async function printTestLabelUsb(labelSize = '40x30', protocol = 'escpos', opts = {}) {
+export async function printTestLabelUsb(labelSize = '40x30', _protocol = 'tspl', opts = {}) {
   const sampleOrder = {
     orderCode: '#TEST4',
     createdAt: new Date().toISOString(),
@@ -355,7 +325,7 @@ export async function printTestLabelUsb(labelSize = '40x30', protocol = 'escpos'
       }
     ]
   };
-  await printOrderViaUsb(sampleOrder, labelSize, protocol, { ...opts, drawBorder: true });
+  await printOrderViaUsb(sampleOrder, labelSize, 'tspl', { ...opts, drawBorder: true });
 }
 
 function uint8ToBase64(bytes) {
@@ -443,10 +413,8 @@ export function buildOrderTsplBytes(order, labelSize = '40x30', opts = {}) {
   return merged;
 }
 
-export async function printOrderViaBridge(order, labelSize = '40x30', opts = {}, protocol = 'escpos') {
-  const bytes = protocol === 'tspl'
-    ? buildOrderTsplBytes(order, labelSize, opts)
-    : buildOrderEscPosBytes(order, labelSize, opts);
+export async function printOrderViaBridge(order, labelSize = '40x30', opts = {}) {
+  const bytes = buildOrderTsplBytes(order, labelSize, opts);
   const res = await fetch('http://127.0.0.1:9191/print', {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
@@ -458,7 +426,7 @@ export async function printOrderViaBridge(order, labelSize = '40x30', opts = {},
   }
 }
 
-export async function printTestLabelBridge(labelSize = '40x30', opts = {}, protocol = 'escpos') {
+export async function printTestLabelBridge(labelSize = '40x30', opts = {}) {
   const sampleOrder = {
     orderCode: '#TEST5',
     createdAt: new Date().toISOString(),
@@ -475,10 +443,10 @@ export async function printTestLabelBridge(labelSize = '40x30', opts = {}, proto
       }
     ]
   };
-  await printOrderViaBridge(sampleOrder, labelSize, { ...opts, drawBorder: false }, protocol);
+  await printOrderViaBridge(sampleOrder, labelSize, { ...opts, drawBorder: false });
 }
 export function printOrderViaRawBt(order, labelSize = '40x30', opts = {}) {
-  const bytes = buildOrderEscPosBytes(order, labelSize, opts);
+  const bytes = buildOrderTsplBytes(order, labelSize, opts);
   const b64 = uint8ToBase64(bytes);
   window.location.href = `rawbt:base64,${b64}`;
 }

@@ -820,6 +820,134 @@ button {
   border-radius: 6px;
 }
 
+/* Touch-friendly Customize Drink Modal (wide, zero-scroll on landscape POS) */
+.modal.customize-modal {
+  max-width: 960px;
+  width: 96vw;
+  padding: 16px 20px;
+  gap: 12px;
+  border-radius: 16px;
+}
+
+.customize-modal .modal-header h3 {
+  font-size: 19px;
+}
+
+.customize-close-btn {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.customize-row-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.customize-modal .option-section h4 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.customize-modal .option-chips {
+  gap: 8px;
+}
+
+.customize-modal .chip {
+  padding: 10px 15px;
+  font-size: 14.5px;
+  border-radius: 10px;
+  min-height: 42px;
+}
+
+.customize-modal .option-chips.topping-chips {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.customize-modal .option-chips.topping-chips .chip {
+  padding: 9px 10px;
+  font-size: 13.5px;
+  border-radius: 10px;
+  min-height: 42px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.customize-modal .option-chips.size-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.customize-modal .option-chips.size-chips .chip {
+  min-height: 52px;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.customize-modal .option-chips.level-chips {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.customize-modal .option-chips.level-chips .chip {
+  padding: 10px 4px;
+  text-align: center;
+}
+
+.customize-modal .input-sm {
+  padding: 10px 14px;
+  font-size: 14.5px;
+  min-height: 42px;
+  border-radius: 10px;
+}
+
+.customize-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.customize-qty .qty-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.customize-submit-btn {
+  padding: 11px 28px;
+  font-size: 16px;
+  font-weight: 700;
+  min-height: 46px;
+  border-radius: 12px;
+}
+
+@media (max-width: 760px) {
+  .customize-row-2col {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .customize-modal .option-chips.topping-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .chip.active {
   background: var(--primary-soft);
   border-color: var(--primary);

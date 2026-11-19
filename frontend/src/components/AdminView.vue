@@ -3,7 +3,6 @@ import { ref, computed, onMounted } from 'vue';
 import {
   ShieldCheck,
   LogOut,
-  ArrowLeft,
   RefreshCw,
   Loader2,
   TrendingUp,
@@ -16,8 +15,6 @@ import {
   Users
 } from 'lucide-vue-next';
 import { api, formatVnd, getTodayStr, shiftDateStr, getAdminToken, setAdminToken, getSavedUser, setSavedUser, groupOrdersByShift } from '../api.js';
-
-const emit = defineEmits(['go-pos']);
 
 const adminUser = ref(getSavedUser());
 const isSuperAdmin = computed(() => adminUser.value?.role === 'superadmin');
@@ -243,7 +240,7 @@ async function handleLogin() {
   }
   loginLoading.value = true;
   try {
-    const res = await api.login(usernameInput.value.trim(), passwordInput.value);
+    const res = await api.login(usernameInput.value.trim(), passwordInput.value, 'admin');
     if (!res.token) throw new Error('Không nhận được phiên đăng nhập từ máy chủ');
     setAdminToken(res.token);
     adminUser.value = res.user || { username: usernameInput.value.trim(), role: 'admin' };
@@ -553,12 +550,6 @@ onMounted(() => {
           <span>{{ loginLoading ? 'Đang xác thực...' : 'Đăng nhập Admin' }}</span>
         </button>
       </form>
-
-      <div style="margin-top: 14px; text-align: center">
-        <button type="button" class="btn btn-outline btn-sm" @click="emit('go-pos')">
-          <ArrowLeft :size="14" /> Quay lại trang bán hàng
-        </button>
-      </div>
     </div>
   </div>
 
@@ -603,9 +594,6 @@ onMounted(() => {
         </span>
         <button class="btn btn-outline btn-sm" @click="openPwdModal" title="Đổi mật khẩu Admin">
           <KeyRound :size="14" /> Đổi MK
-        </button>
-        <button class="btn btn-outline btn-sm" @click="emit('go-pos')">
-          <ArrowLeft :size="14" /> Bán hàng
         </button>
         <button class="btn btn-danger-soft btn-sm" @click="handleLogout">
           <LogOut :size="14" /> Đăng xuất

@@ -86,6 +86,18 @@ function requireAuth(req, res, next) {
   next();
 }
 
+function requirePos(req, res, next) {
+  const user = getUserFromReq(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Vui lòng đăng nhập để tiếp tục' });
+  }
+  if (user.role !== 'staff') {
+    return res.status(403).json({ error: 'Chỉ tài khoản bán hàng mới được thao tác trên POS' });
+  }
+  req.user = user;
+  next();
+}
+
 function requireAdmin(req, res, next) {
   const user = getUserFromReq(req);
   if (!user) {
@@ -194,10 +206,21 @@ app.get('/api/health', (_req, res) => {
 });
 
 // --- AUTH ---
+function checkPortalAllowed(user, portal) {
+  if (portal === 'pos' && user.role !== 'staff') {
+    return 'Tài khoản quản trị chỉ dùng cho trang Admin, không đăng nhập vào Bán hàng';
+  }
+  if (portal === 'admin' && user.role === 'staff') {
+    return 'Tài khoản bán hàng chỉ dùng cho trang POS, không có quyền vào Admin';
+  }
+  return '';
+}
+
 async function handleLogin(req, res) {
   try {
     const username = String(req.body?.username || '').trim();
     const password = String(req.body?.password || '');
+    const portal = String(req.body?.portal || '').trim();
     if (!username || !password) {
       return res.status(400).json({ error: 'Vui lòng nhập đầy đủ tài khoản và mật khẩu' });
     }
@@ -205,6 +228,8 @@ async function handleLogin(req, res) {
     if (GAS_URL) {
       const data = await gasPost({ action: 'adminLogin', username, password });
       const user = data.user || { username, role: 'staff', storeId: 'default', storeName: 'Nguyễn Chánh' };
+      const portalErr = checkPortalAllowed(user, portal);
+      if (portalErr) return res.status(403).json({ error: portalErr });
       return res.json({ ok: true, user, token: signAdminToken(user) });
     }
 
@@ -224,6 +249,8 @@ async function handleLogin(req, res) {
         storeName: 'Tất cả quán',
         spreadsheetId: ''
       };
+      const portalErr = checkPortalAllowed(user, portal);
+      if (portalErr) return res.status(403).json({ error: portalErr });
       return res.json({ ok: true, user, token: signAdminToken(user) });
     }
     const store = (db.stores || []).find((s) => s.id === (found.storeId || 'default'));
@@ -237,6 +264,8 @@ async function handleLogin(req, res) {
       storeName: store.name,
       spreadsheetId: ''
     };
+    const portalErr = checkPortalAllowed(user, portal);
+    if (portalErr) return res.status(403).json({ error: portalErr });
     res.json({ ok: true, user, token: signAdminToken(user) });
   } catch (err) {
     handleError(res, err);
@@ -708,7 +737,7 @@ app.get('/api/shifts', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/shifts/open', requireAuth, async (req, res) => {
+app.post('/api/shifts/open', requirePos, async (req, res) => {
   try {
     const store = await resolveTargetStore(req);
     const openedBy = String(req.body?.openedBy || req.user.username || '').trim();
@@ -758,7 +787,7 @@ app.post('/api/shifts/open', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/shifts/close', requireAuth, async (req, res) => {
+app.post('/api/shifts/close', requirePos, async (req, res) => {
   try {
     const rawActualCash = req.body?.actualCash;
     if (rawActualCash === '' || rawActualCash === undefined || rawActualCash === null || Number.isNaN(Number(rawActualCash)) || Number(rawActualCash) < 0) {
@@ -802,7 +831,7 @@ app.post('/api/shifts/close', requireAuth, async (req, res) => {
   }
 });
 
-app.post('/api/orders', requireAuth, async (req, res) => {
+app.post('/api/orders', requirePos, async (req, res) => {
   try {
     const store = await resolveTargetStore(req);
     const {
@@ -883,7 +912,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
   }
 });
 
-app.patch('/api/orders/:id/cancel', requireAuth, async (req, res) => {
+app.patch('/api/orders/:id/cancel', requirePos, async (req, res) => {
   try {
     const store = await resolveTargetStore(req);
     if (GAS_URL) {

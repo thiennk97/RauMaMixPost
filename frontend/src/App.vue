@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
-import { ShoppingBag, BarChart3, Usb, Printer, Loader2, AlertTriangle, LogOut, ShieldCheck } from 'lucide-vue-next';
+import { ShoppingBag, BarChart3, Usb, Printer, Loader2, AlertTriangle, LogOut, Settings, X } from 'lucide-vue-next';
 import { api, formatVnd, getSavedUser, setSavedUser, setAdminToken } from './api.js';
 import { pendingCount, failedCount, resumeOrderQueue, retryFailedOrders } from './orderQueue.js';
 import {
@@ -44,7 +44,7 @@ async function handlePosLogin() {
   }
   posLoginLoading.value = true;
   try {
-    const res = await api.login(posUsername.value.trim(), posPassword.value);
+    const res = await api.login(posUsername.value.trim(), posPassword.value, 'pos');
     if (!res.token) throw new Error('Không nhận được phiên đăng nhập');
     setAdminToken(res.token);
     setSavedUser(res.user);
@@ -68,25 +68,6 @@ function handlePosLogout() {
   products.value = [];
   toppings.value = [];
   currentShift.value = null;
-}
-
-function goAdmin() {
-  if (typeof window !== 'undefined') {
-    window.history.pushState({}, '', '/admin');
-  }
-  isAdminPage.value = true;
-}
-
-function goPos() {
-  if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-    window.history.pushState({}, '', '/');
-  }
-  currentUser.value = getSavedUser();
-  isAdminPage.value = false;
-  if (currentUser.value) {
-    if (!products.value.length) loadMenu();
-    loadCurrentShift();
-  }
 }
 
 function onPopState() {
@@ -115,8 +96,9 @@ function setLabelSize(sz) {
 
 const activePrintOrder = ref(null);
 const showLabelPreview = ref(false);
+const showSettingsModal = ref(false);
 const usbPrinterName = ref('');
-const usbProtocol = ref(localStorage.getItem('usbProtocol') || 'tspl');
+const USB_PROTOCOL = 'tspl';
 const printMode = ref(localStorage.getItem('printMode') || 'bridge');
 const rotate180 = ref(localStorage.getItem('usbRotate180') === '1');
 const webUsbAvailable = isWebUsbSupported();
@@ -124,11 +106,6 @@ const webUsbAvailable = isWebUsbSupported();
 function setPrintMode(mode) {
   printMode.value = mode;
   localStorage.setItem('printMode', mode);
-}
-
-function setUsbProtocol(val) {
-  usbProtocol.value = val;
-  localStorage.setItem('usbProtocol', val);
 }
 
 function toggleRotate180() {
@@ -205,7 +182,7 @@ async function handleConnectUsb() {
 async function handleTestPrint() {
   if (printMode.value === 'bridge') {
     try {
-      await printTestLabelBridge(labelSize.value, getUsbOpts(), usbProtocol.value);
+      await printTestLabelBridge(labelSize.value, getUsbOpts(), USB_PROTOCOL);
     } catch (err) {
       alert(`Lỗi APK Bridge: ${err.message}\n(Đảm bảo đã mở app Raumamix Printer trên máy POS)`);
     }
@@ -216,7 +193,7 @@ async function handleTestPrint() {
     return;
   }
   try {
-    await printTestLabelUsb(labelSize.value, usbProtocol.value, getUsbOpts());
+    await printTestLabelUsb(labelSize.value, USB_PROTOCOL, getUsbOpts());
   } catch (err) {
     alert(`Lỗi in test: ${err.message}`);
   }
@@ -226,7 +203,7 @@ async function triggerPrint(order, previewOnly = false) {
   activePrintOrder.value = order;
   if (!previewOnly && printMode.value === 'bridge') {
     try {
-      await printOrderViaBridge(order, labelSize.value, getUsbOpts(), usbProtocol.value);
+      await printOrderViaBridge(order, labelSize.value, getUsbOpts(), USB_PROTOCOL);
     } catch (err) {
       console.warn('Bỏ qua in APK Bridge (không có máy in):', err.message);
     }
@@ -238,7 +215,7 @@ async function triggerPrint(order, previewOnly = false) {
   }
   if (!previewOnly && printMode.value === 'webusb' && usbPrinterName.value) {
     try {
-      await printOrderViaUsb(order, labelSize.value, usbProtocol.value, getUsbOpts());
+      await printOrderViaUsb(order, labelSize.value, USB_PROTOCOL, getUsbOpts());
       return;
     } catch (err) {
       console.warn('Bỏ qua in WebUSB (không có máy in):', err.message);
@@ -273,7 +250,7 @@ function handleReprintOrder(order) {
 async function printFromPreview() {
   if (printMode.value === 'bridge' && activePrintOrder.value) {
     try {
-      await printOrderViaBridge(activePrintOrder.value, labelSize.value, getUsbOpts(), usbProtocol.value);
+      await printOrderViaBridge(activePrintOrder.value, labelSize.value, getUsbOpts(), USB_PROTOCOL);
       showLabelPreview.value = false;
       return;
     } catch (err) {
@@ -288,7 +265,7 @@ async function printFromPreview() {
   }
   if (printMode.value === 'webusb' && usbPrinterName.value && activePrintOrder.value) {
     try {
-      await printOrderViaUsb(activePrintOrder.value, labelSize.value, usbProtocol.value, getUsbOpts());
+      await printOrderViaUsb(activePrintOrder.value, labelSize.value, USB_PROTOCOL, getUsbOpts());
       showLabelPreview.value = false;
       return;
     } catch (err) {
@@ -318,7 +295,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <AdminView v-if="isAdminPage" @go-pos="goPos" />
+  <AdminView v-if="isAdminPage" />
 
   <div v-else-if="!currentUser" class="admin-login-shell">
     <div class="admin-login-card panel">
@@ -403,74 +380,13 @@ onUnmounted(() => {
         >
           <AlertTriangle :size="13" /> Lỗi {{ failedCount }} đơn · Gửi lại
         </button>
-        <select
-          :value="printMode"
-          @change="setPrintMode($event.target.value)"
-          class="label-size-select"
-          title="Chế độ in tem"
-        >
-          <option value="bridge">APK Bridge (Android)</option>
-          <option value="rawbt">RawBT (Android USB)</option>
-          <option value="webusb">WebUSB</option>
-          <option value="chrome">In qua Chrome</option>
-        </select>
-        <a
-          v-if="printMode === 'bridge'"
-          href="/download/raumamix-printer.apk"
+        <button
           class="btn btn-outline btn-sm"
-          style="text-decoration: none"
-          title="Tải file APK cài lên máy FABiBox"
+          @click="showSettingsModal = true"
+          title="Cài đặt in tem"
+          style="padding: 6px 9px"
         >
-          Tải APK
-        </a>
-        <button
-          v-if="printMode === 'webusb' && webUsbAvailable"
-          class="btn btn-sm"
-          :class="usbPrinterName ? 'btn-primary' : 'btn-outline'"
-          @click="handleConnectUsb"
-          title="Kết nối trực tiếp máy in tem USB ITP3300"
-        >
-          <Usb :size="14" />
-          {{ usbPrinterName ? `USB: ${usbPrinterName}` : 'Kết nối máy in USB' }}
-        </button>
-        <select
-          v-if="printMode === 'bridge' || (printMode === 'webusb' && usbPrinterName)"
-          :value="usbProtocol"
-          @change="setUsbProtocol($event.target.value)"
-          class="label-size-select"
-          title="Chuẩn lệnh máy in"
-        >
-          <option value="escpos">ESC/POS (ITP3300)</option>
-          <option value="tspl">TSPL (Tem nhãn)</option>
-        </select>
-        <button
-          v-if="printMode === 'bridge' || printMode === 'rawbt' || (printMode === 'webusb' && usbPrinterName)"
-          class="btn btn-sm"
-          :class="rotate180 ? 'btn-primary' : 'btn-outline'"
-          @click="toggleRotate180"
-          title="Đảo chiều chữ 180°"
-        >
-          Xoay 180°
-        </button>
-        <button
-          v-if="printMode === 'bridge' || printMode === 'rawbt' || (printMode === 'webusb' && usbPrinterName)"
-          class="btn btn-outline btn-sm"
-          @click="handleTestPrint"
-          title="In thử 1 tem"
-        >
-          <Printer :size="14" /> Test
-        </button>
-        <select :value="labelSize" @change="setLabelSize($event.target.value)" class="label-size-select">
-          <option value="40x30">40×30mm</option>
-          <option value="50x30">50×30mm</option>
-        </select>
-        <button
-          v-if="currentUser.role === 'admin' || currentUser.role === 'superadmin'"
-          class="btn btn-outline btn-sm"
-          @click="goAdmin"
-          title="Mở trang Quản trị"
-        >
-          <ShieldCheck :size="14" /> Quản trị
+          <Settings :size="16" />
         </button>
         <button
           class="btn btn-danger-soft btn-sm"
@@ -517,5 +433,97 @@ onUnmounted(() => {
     @close="showLabelPreview = false"
     @print="printFromPreview"
   />
+
+  <!-- Settings Modal -->
+  <div v-if="showSettingsModal" class="modal-backdrop" @click.self="showSettingsModal = false">
+    <div class="modal" style="max-width: 440px; width: 95%">
+      <div class="modal-header">
+        <h3 style="display: inline-flex; align-items: center; gap: 8px; margin: 0">
+          <Settings :size="18" /> Cài đặt
+        </h3>
+        <button class="btn btn-outline btn-sm" @click="showSettingsModal = false">
+          <X :size="16" />
+        </button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 14px; padding-top: 10px">
+        <div style="border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <div style="font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 6px">
+              <Printer :size="15" /> Cài đặt in tem
+            </div>
+            <span class="badge badge-ok" style="font-size: 11px">TSPL (Tem nhãn)</span>
+          </div>
+
+          <div>
+            <label class="field-label">Chế độ in tem</label>
+            <select
+              :value="printMode"
+              @change="setPrintMode($event.target.value)"
+              class="input-sm"
+            >
+              <option value="bridge">APK Bridge (Android)</option>
+              <option value="rawbt">RawBT (Android USB)</option>
+              <option value="webusb">WebUSB</option>
+              <option value="chrome">In qua Chrome</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="field-label">Khổ tem</label>
+            <select :value="labelSize" @change="setLabelSize($event.target.value)" class="input-sm">
+              <option value="40x30">40×30mm</option>
+              <option value="50x30">50×30mm</option>
+            </select>
+          </div>
+
+          <div v-if="printMode === 'bridge'" style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+            <span style="font-size: 13px; color: var(--text-muted)">Ứng dụng in trên máy POS Android</span>
+            <a
+              href="/download/raumamix-printer.apk"
+              class="btn btn-outline btn-sm"
+              style="text-decoration: none"
+              title="Tải file APK cài lên máy FABiBox"
+            >
+              Tải APK
+            </a>
+          </div>
+
+          <div v-if="printMode === 'webusb' && webUsbAvailable" style="display: flex; align-items: center; justify-content: space-between; gap: 8px">
+            <span style="font-size: 13px; color: var(--text-muted)">Máy in USB</span>
+            <button
+              class="btn btn-sm"
+              :class="usbPrinterName ? 'btn-primary' : 'btn-outline'"
+              @click="handleConnectUsb"
+            >
+              <Usb :size="14" />
+              {{ usbPrinterName ? `USB: ${usbPrinterName}` : 'Kết nối máy in USB' }}
+            </button>
+          </div>
+
+          <div
+            v-if="printMode === 'bridge' || printMode === 'rawbt' || (printMode === 'webusb' && usbPrinterName)"
+            style="display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; border-top: 1px solid var(--border)"
+          >
+            <button
+              class="btn btn-sm"
+              :class="rotate180 ? 'btn-primary' : 'btn-outline'"
+              @click="toggleRotate180"
+              title="Đảo chiều chữ 180°"
+            >
+              Xoay 180°: {{ rotate180 ? 'Bật' : 'Tắt' }}
+            </button>
+            <button
+              class="btn btn-outline btn-sm"
+              @click="handleTestPrint"
+              title="In thử 1 tem"
+            >
+              <Printer :size="14" /> In thử 1 tem
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
   </template>
 </template>

@@ -16,6 +16,15 @@ const props = defineProps({
 
 const emit = defineEmits(['order-created', 'open-shift']);
 
+function formatShortK(amount) {
+  const n = Number(amount) || 0;
+  if (n >= 1000) {
+    const k = n / 1000;
+    return `${Number.isInteger(k) ? k : k.toFixed(1).replace(/\.0$/, '')}K`;
+  }
+  return `${n}đ`;
+}
+
 const CHANNELS = [
   { id: 'Mang về', label: 'Mang về', color: '#15803d' },
   { id: 'Shopee', label: 'Shopee', color: '#ee4d2d' },
@@ -441,22 +450,22 @@ function submitOrder(shouldPrint = true) {
 
   <!-- Customize Drink Modal: Size (as modifier) + Topping -->
   <div v-if="editingProduct" class="modal-backdrop" @click.self="editingProduct = null">
-    <div class="modal">
+    <div class="modal customize-modal">
       <div class="modal-header">
         <div>
           <h3>{{ editingProduct.name }}</h3>
-          <div style="font-size: 12px; color: var(--text-muted)">
-            Giá ({{ orderType }}): {{ formatVnd(getProductPrice(editingProduct)) }} · Nhóm: {{ editingProduct.category }}
+          <div style="font-size: 13.5px; color: var(--text-muted); margin-top: 2px">
+            Giá ({{ orderType }}): <b>{{ formatVnd(getProductPrice(editingProduct)) }}</b> · {{ editingProduct.category }}
           </div>
         </div>
-        <button class="btn btn-outline btn-sm" @click="editingProduct = null">
-          <X :size="16" />
+        <button class="btn btn-outline customize-close-btn" @click="editingProduct = null">
+          <X :size="20" />
         </button>
       </div>
 
       <div class="option-section">
-        <h4>{{ modalSizes[0]?.locked ? 'Size mặc định' : 'Chọn Size (tính như topping thêm)' }}</h4>
-        <div class="option-chips">
+        <h4>{{ modalSizes[0]?.locked ? 'Size mặc định' : 'Chọn Size' }}</h4>
+        <div class="option-chips size-chips">
           <button
             v-for="sz in modalSizes"
             :key="sz.id"
@@ -464,7 +473,7 @@ function submitOrder(shouldPrint = true) {
             :class="{ active: optSizeObj?.id === sz.id }"
             @click="!sz.locked && (optSizeObj = sz)"
           >
-            {{ sz.name }} ({{ sz.extraPrice ? '+' + formatVnd(sz.extraPrice) : '+0đ' }})
+            {{ sz.name }} ({{ sz.extraPrice ? '+' + formatShortK(sz.extraPrice) : '+0' }})
           </button>
         </div>
       </div>
@@ -479,14 +488,14 @@ function submitOrder(shouldPrint = true) {
             :class="{ active: optToppings.some((t) => t.id === tp.id) }"
             @click="toggleTopping(tp)"
           >
-            {{ tp.name }} (+{{ formatVnd(tp.price) }})
+            {{ tp.name }} (+{{ formatShortK(tp.price) }})
           </button>
         </div>
       </div>
 
       <div class="option-section">
         <h4>Độ ngọt</h4>
-        <div class="option-chips">
+        <div class="option-chips level-chips">
           <button
             v-for="s in SUGAR_OPTS"
             :key="s"
@@ -501,7 +510,7 @@ function submitOrder(shouldPrint = true) {
 
       <div class="option-section">
         <h4>Lượng đá</h4>
-        <div class="option-chips">
+        <div class="option-chips level-chips">
           <button
             v-for="ice in ICE_OPTS"
             :key="ice"
@@ -519,15 +528,15 @@ function submitOrder(shouldPrint = true) {
         <input v-model="optNote" type="text" class="input-sm" placeholder="VD: Ít sữa, để riêng đá..." />
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px">
-        <div class="qty-control">
-          <button class="qty-btn" @click="optQty = Math.max(1, optQty - 1)"><Minus :size="14" /></button>
-          <b style="min-width: 22px; text-align: center">{{ optQty }}</b>
-          <button class="qty-btn" @click="optQty++"><Plus :size="14" /></button>
+      <div class="customize-footer">
+        <div class="qty-control customize-qty">
+          <button class="qty-btn" @click="optQty = Math.max(1, optQty - 1)"><Minus :size="18" /></button>
+          <b style="min-width: 34px; text-align: center; font-size: 18px">{{ optQty }}</b>
+          <button class="qty-btn" @click="optQty++"><Plus :size="18" /></button>
         </div>
-        <button class="btn btn-primary" :disabled="submitting" @click="addCustomizedToCart">
+        <button class="btn btn-primary customize-submit-btn" :disabled="submitting" @click="addCustomizedToCart">
           <template v-if="submitting">
-            <Loader2 :size="14" class="spin" /> Đang gửi đơn trước...
+            <Loader2 :size="16" class="spin" /> Đang gửi đơn trước...
           </template>
           <template v-else>Thêm · {{ formatVnd(modalUnitPrice * optQty) }}</template>
         </button>

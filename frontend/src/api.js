@@ -1,6 +1,19 @@
 const BASE = '/api';
-const TOKEN_KEY = 'raumamix_token';
-const USER_KEY = 'raumamix_user';
+
+function isAdminPortal() {
+  if (typeof window === 'undefined') return false;
+  const p = window.location.pathname || '/';
+  const h = window.location.hash || '';
+  return p === '/admin' || p.startsWith('/admin/') || h === '#/admin' || h.startsWith('#/admin/');
+}
+
+function getTokenKey() {
+  return isAdminPortal() ? 'raumamix_admin_token' : 'raumamix_pos_token';
+}
+
+function getUserKey() {
+  return isAdminPortal() ? 'raumamix_admin_user' : 'raumamix_pos_user';
+}
 
 export function getGasUrl() {
   return '';
@@ -12,7 +25,7 @@ export function setGasUrl() {
 
 export function getAdminToken() {
   try {
-    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem('raumamix_admin_token') || '';
+    return localStorage.getItem(getTokenKey()) || '';
   } catch {
     return '';
   }
@@ -21,10 +34,9 @@ export function getAdminToken() {
 export function setAdminToken(token) {
   try {
     if (token) {
-      localStorage.setItem(TOKEN_KEY, String(token));
+      localStorage.setItem(getTokenKey(), String(token));
     } else {
-      localStorage.removeItem(TOKEN_KEY);
-      sessionStorage.removeItem('raumamix_admin_token');
+      localStorage.removeItem(getTokenKey());
     }
   } catch {
     // ignore storage errors
@@ -34,8 +46,12 @@ export function setAdminToken(token) {
 export function getSavedUser() {
   try {
     if (!getAdminToken()) return null;
-    const raw = localStorage.getItem(USER_KEY) || sessionStorage.getItem('raumamix_admin_user');
-    return raw ? JSON.parse(raw) : null;
+    const raw = localStorage.getItem(getUserKey());
+    if (!raw) return null;
+    const user = JSON.parse(raw);
+    if (isAdminPortal() && user?.role === 'staff') return null;
+    if (!isAdminPortal() && user?.role !== 'staff') return null;
+    return user;
   } catch {
     return null;
   }
@@ -44,10 +60,9 @@ export function getSavedUser() {
 export function setSavedUser(user) {
   try {
     if (user) {
-      localStorage.setItem(USER_KEY, JSON.stringify(user));
+      localStorage.setItem(getUserKey(), JSON.stringify(user));
     } else {
-      localStorage.removeItem(USER_KEY);
-      sessionStorage.removeItem('raumamix_admin_user');
+      localStorage.removeItem(getUserKey());
     }
   } catch {
     // ignore storage errors
@@ -72,8 +87,8 @@ async function requestApi(path, options = {}) {
 }
 
 export const api = {
-  login: (username, password) =>
-    requestApi('/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  login: (username, password, portal = '') =>
+    requestApi('/login', { method: 'POST', body: JSON.stringify({ username, password, ...(portal ? { portal } : {}) }) }),
   me: () => requestApi('/me'),
   getMenu: (storeId = '') => {
     const q = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
