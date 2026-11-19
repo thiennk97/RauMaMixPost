@@ -1,126 +1,183 @@
 const BASE = '/api';
-const DEFAULT_GAS_URL =
-  'https://script.google.com/macros/s/AKfycbxn4AaOgAyHeLShYN_R-CY0uWhilQC6Vi4-GQ1EzdtBRGQO1lcpKUmAo1JuWoVVsrbU/exec';
+const TOKEN_KEY = 'raumamix_token';
+const USER_KEY = 'raumamix_user';
 
 export function getGasUrl() {
-  const saved = (localStorage.getItem('gasUrl') || import.meta.env.VITE_GAS_URL || '').trim();
-  if (saved) return saved;
-  if (typeof window !== 'undefined' && /github\.io|vercel\.app|pages\.dev/.test(window.location.hostname)) {
-    return DEFAULT_GAS_URL;
-  }
   return '';
 }
 
-export function setGasUrl(url) {
-  const clean = String(url || '').trim();
-  if (clean) {
-    localStorage.setItem('gasUrl', clean);
-  } else {
-    localStorage.removeItem('gasUrl');
+export function setGasUrl() {
+  // Đã chuyển sang gọi qua Backend (/api) để bảo mật URL & API_SECRET của Google Sheet
+}
+
+export function getAdminToken() {
+  try {
+    return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem('raumamix_admin_token') || '';
+  } catch {
+    return '';
   }
 }
 
-async function requestLocal(path, options = {}) {
+export function setAdminToken(token) {
+  try {
+    if (token) {
+      localStorage.setItem(TOKEN_KEY, String(token));
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem('raumamix_admin_token');
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function getSavedUser() {
+  try {
+    if (!getAdminToken()) return null;
+    const raw = localStorage.getItem(USER_KEY) || sessionStorage.getItem('raumamix_admin_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setSavedUser(user) {
+  try {
+    if (user) {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(USER_KEY);
+      sessionStorage.removeItem('raumamix_admin_user');
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+async function requestApi(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  const token = getAdminToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options
+    ...options,
+    headers
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || `Lỗi máy chủ (${res.status})`);
-  }
-  return data;
-}
-
-async function gasGet(params) {
-  const url = new URL(getGasUrl());
-  Object.entries(params).forEach(([k, v]) => {
-    if (v != null) url.searchParams.set(k, String(v));
-  });
-  const res = await fetch(url.toString());
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.error) {
-    throw new Error(data.error || `Lỗi Google Sheet (${res.status})`);
-  }
-  return data;
-}
-
-async function gasPost(payload) {
-  const res = await fetch(getGasUrl(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(payload)
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.error) {
-    throw new Error(data.error || `Lỗi Google Sheet (${res.status})`);
+    const err = new Error(data.error || `Lỗi máy chủ (${res.status})`);
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
 
 export const api = {
-  getMenu: () => (getGasUrl() ? gasGet({ action: 'menu' }) : requestLocal('/menu')),
-  createCategory: (name) =>
-    getGasUrl()
-      ? gasPost({ action: 'createCategory', name })
-      : requestLocal('/categories', { method: 'POST', body: JSON.stringify({ name }) }),
-  deleteCategory: (id) =>
-    getGasUrl()
-      ? gasPost({ action: 'deleteCategory', id })
-      : requestLocal(`/categories/${id}`, { method: 'DELETE' }),
+  login: (username, password) =>
+    requestApi('/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  me: () => requestApi('/me'),
+  getMenu: (storeId = '') => {
+    const q = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
+    return requestApi(`/menu${q}`);
+  },
+  createCategory: (name, storeId = '') =>
+    requestApi('/categories', { method: 'POST', body: JSON.stringify({ name, ...(storeId ? { storeId } : {}) }) }),
+  deleteCategory: (id, storeId = '') => {
+    const q = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
+    return requestApi(`/categories/${id}${q}`, { method: 'DELETE' });
+  },
   createProduct: (payload) =>
-    getGasUrl()
-      ? gasPost({ action: 'createProduct', ...payload })
-      : requestLocal('/products', { method: 'POST', body: JSON.stringify(payload) }),
+    requestApi('/products', { method: 'POST', body: JSON.stringify(payload) }),
   updateProduct: (id, payload) =>
-    getGasUrl()
-      ? gasPost({ action: 'updateProduct', id, ...payload })
-      : requestLocal(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  deleteProduct: (id) =>
-    getGasUrl()
-      ? gasPost({ action: 'deleteProduct', id })
-      : requestLocal(`/products/${id}`, { method: 'DELETE' }),
+    requestApi(`/products/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteProduct: (id, storeId = '') => {
+    const q = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
+    return requestApi(`/products/${id}${q}`, { method: 'DELETE' });
+  },
   createOrder: (payload) =>
-    getGasUrl()
-      ? gasPost({ action: 'createOrder', ...payload })
-      : requestLocal('/orders', { method: 'POST', body: JSON.stringify(payload) }),
-  cancelOrder: (id) =>
-    getGasUrl()
-      ? gasPost({ action: 'cancelOrder', id })
-      : requestLocal(`/orders/${id}/cancel`, { method: 'PATCH' }),
-  getCurrentShift: () =>
-    getGasUrl() ? gasGet({ action: 'currentShift' }) : requestLocal('/shifts/current'),
-  getShifts: (from, to) => {
-    if (getGasUrl()) {
-      return gasGet({ action: 'shifts', from, to });
-    }
+    requestApi('/orders', { method: 'POST', body: JSON.stringify(payload) }),
+  cancelOrder: (id, storeId = '') => {
+    const q = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
+    return requestApi(`/orders/${id}/cancel${q}`, { method: 'PATCH' });
+  },
+  getCurrentShift: (storeId = '') => {
+    const q = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
+    return requestApi(`/shifts/current${q}`);
+  },
+  getShifts: (from, to, { storeId = '' } = {}) => {
     const params = new URLSearchParams();
     if (from) params.set('from', from);
     if (to) params.set('to', to);
-    return requestLocal(`/shifts?${params.toString()}`);
+    if (storeId) params.set('storeId', storeId);
+    return requestApi(`/shifts?${params.toString()}`);
   },
   openShift: (payload) =>
-    getGasUrl()
-      ? gasPost({ action: 'openShift', ...payload })
-      : requestLocal('/shifts/open', { method: 'POST', body: JSON.stringify(payload) }),
+    requestApi('/shifts/open', { method: 'POST', body: JSON.stringify(payload) }),
   closeShift: (payload) =>
-    getGasUrl()
-      ? gasPost({ action: 'closeShift', ...payload })
-      : requestLocal('/shifts/close', { method: 'POST', body: JSON.stringify(payload) }),
-  getRevenue: (from, to, shiftId = '') => {
-    if (getGasUrl()) {
-      return gasGet({ action: 'revenue', from, to, ...(shiftId ? { shiftId } : {}) });
-    }
+    requestApi('/shifts/close', { method: 'POST', body: JSON.stringify(payload) }),
+  getRevenue: (from, to, shiftId = '', { storeId = '' } = {}) => {
     const params = new URLSearchParams();
     if (from) params.set('from', from);
     if (to) params.set('to', to);
     if (shiftId) params.set('shiftId', shiftId);
-    return requestLocal(`/revenue?${params.toString()}`);
-  }
+    if (storeId) params.set('storeId', storeId);
+    return requestApi(`/revenue?${params.toString()}`);
+  },
+  adminLogin: (username, password) =>
+    requestApi('/admin/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  adminChangePassword: (username, currentPassword, newPassword) =>
+    requestApi(
+      '/admin/change-password',
+      { method: 'POST', body: JSON.stringify({ username, currentPassword, newPassword }) }
+    ),
+  getStores: () => requestApi('/stores'),
+  createStore: (payload) => requestApi('/stores', { method: 'POST', body: JSON.stringify(payload) }),
+  updateStore: (id, payload) => requestApi(`/stores/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  getUsers: () => requestApi('/users'),
+  createUser: (payload) => requestApi('/users', { method: 'POST', body: JSON.stringify(payload) }),
+  updateUser: (username, payload) =>
+    requestApi(`/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: JSON.stringify(payload) })
 };
 
 export function formatVnd(amount) {
   return new Intl.NumberFormat('vi-VN').format(Number(amount) || 0) + 'đ';
+}
+
+export function groupOrdersByShift(orders = [], shifts = []) {
+  const shiftMap = new Map();
+  for (const s of shifts || []) {
+    if (s.storeId) shiftMap.set(`${s.storeId}::${s.id}`, s);
+    if (!shiftMap.has(s.id)) shiftMap.set(s.id, s);
+  }
+
+  const groups = new Map();
+  for (const o of orders || []) {
+    const sid = o.shiftId || '__no_shift__';
+    const key = o.storeId ? `${o.storeId}::${sid}` : sid;
+    if (!groups.has(key)) {
+      const shift = (o.storeId && shiftMap.get(`${o.storeId}::${sid}`)) || shiftMap.get(sid) || null;
+      const storeName = o.storeName || shift?.storeName || '';
+      groups.set(key, {
+        key,
+        shiftId: sid,
+        shift,
+        storeName,
+        orders: [],
+        completedCount: 0,
+        cancelledCount: 0,
+        totalRevenue: 0
+      });
+    }
+    const g = groups.get(key);
+    g.orders.push(o);
+    if (o.status === 'cancelled') {
+      g.cancelledCount += 1;
+    } else {
+      g.completedCount += 1;
+      g.totalRevenue += Number(o.total) || 0;
+    }
+  }
+
+  return Array.from(groups.values());
 }
 
 export function getTodayStr() {

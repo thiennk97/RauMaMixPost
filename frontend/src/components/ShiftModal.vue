@@ -20,8 +20,8 @@ const openingCash = ref(0);
 
 // Close shift form
 const closedBy = ref('');
-const actualCash = ref(0);
-const cashTouched = ref(false);
+const actualCash = ref('');
+const closeError = ref('');
 const note = ref('');
 const submitting = ref(false);
 
@@ -32,10 +32,10 @@ watch(
   () => [props.show, props.currentShift?.id],
   ([visible]) => {
     if (!visible) return;
+    closeError.value = '';
     const shift = props.currentShift;
     if (shift) {
-      actualCash.value = Number(shift.expectedCash) || 0;
-      cashTouched.value = false;
+      actualCash.value = '';
       closedBy.value = shift.openedBy || '';
       note.value = '';
     } else {
@@ -47,24 +47,18 @@ watch(
   { immediate: true }
 );
 
-// Số liệu ca được làm mới → cập nhật tiền dự kiến nếu nhân viên chưa tự nhập
-watch(
-  () => props.currentShift?.expectedCash,
-  (val) => {
-    if (props.show && props.currentShift && !cashTouched.value) {
-      actualCash.value = Number(val) || 0;
-    }
-  }
-);
-
 function closeModal() {
   if (submitting.value) return;
   emit('close');
 }
 
+const hasActualCash = computed(() => {
+  return actualCash.value !== '' && actualCash.value !== null && actualCash.value !== undefined && !Number.isNaN(Number(actualCash.value));
+});
+
 const cashDiff = computed(() => {
-  if (!props.currentShift) return 0;
-  return (Number(actualCash.value) || 0) - (Number(props.currentShift.expectedCash) || 0);
+  if (!props.currentShift || !hasActualCash.value) return 0;
+  return Number(actualCash.value) - (Number(props.currentShift.expectedCash) || 0);
 });
 
 const cashSales = computed(() => {
@@ -103,19 +97,24 @@ async function handleOpenShift() {
 
 async function handleCloseShift() {
   if (submitting.value || props.refreshing || !props.currentShift) return;
+  closeError.value = '';
+  if (!hasActualCash.value || Number(actualCash.value) < 0) {
+    closeError.value = 'Vui lòng nhập số tiền mặt thực tế đếm được trong két';
+    return;
+  }
   if (!confirm(`Xác nhận chốt và đóng "${props.currentShift.shiftName}"?`)) return;
   submitting.value = true;
   try {
     await api.closeShift({
       id: props.currentShift.id,
       closedBy: closedBy.value.trim(),
-      actualCash: Number(actualCash.value) || 0,
+      actualCash: Number(actualCash.value),
       note: note.value.trim()
     });
     emit('updated', null);
     emit('close');
   } catch (err) {
-    alert(err.message);
+    closeError.value = err.message;
   } finally {
     submitting.value = false;
   }
@@ -223,19 +222,39 @@ async function handleCloseShift() {
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
           <div>
-            <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px">Tiền mặt thực tế đếm được</label>
-            <input v-model.number="actualCash" type="number" min="0" step="1000" class="input-sm" :disabled="submitting" @input="cashTouched = true" />
+            <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px">
+              Tiền mặt thực tế đếm được <span style="color: #dc2626">*</span>
+            </label>
+            <input
+              v-model.number="actualCash"
+              type="number"
+              min="0"
+              step="1000"
+              required
+              placeholder="Nhập tiền thực tế..."
+              class="input-sm"
+              :disabled="submitting"
+              @input="closeError = ''"
+            />
             <div
+              v-if="hasActualCash"
               style="font-size: 12px; margin-top: 4px; font-weight: 600"
               :style="{ color: cashDiff === 0 ? '#16a34a' : cashDiff > 0 ? '#0284c7' : '#dc2626' }"
             >
               Chênh lệch: {{ cashDiff > 0 ? '+' : '' }}{{ formatVnd(cashDiff) }}
+            </div>
+            <div v-else style="font-size: 11px; margin-top: 4px; color: var(--text-muted)">
+              Bắt buộc nhập trước khi chốt ca
             </div>
           </div>
           <div>
             <label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px">Người chốt ca</label>
             <input v-model="closedBy" class="input-sm" placeholder="Tên nhân viên..." />
           </div>
+        </div>
+
+        <div v-if="closeError" class="admin-error-box" style="margin: 0">
+          {{ closeError }}
         </div>
 
         <div>

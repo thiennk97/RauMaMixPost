@@ -1,17 +1,19 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import { Printer, RefreshCw, Ban, Loader2 } from 'lucide-vue-next';
-import { api, formatVnd, getTodayStr, shiftDateStr } from '../api.js';
+import { Printer, RefreshCw, Ban, Loader2, Calendar } from 'lucide-vue-next';
+import { api, formatVnd, getTodayStr, groupOrdersByShift } from '../api.js';
 
 const emit = defineEmits(['reprint-order', 'order-cancelled']);
 
-const fromDate = ref(getTodayStr());
-const toDate = ref(getTodayStr());
-const preset = ref('today');
+const todayStr = ref(getTodayStr());
 const selectedShiftId = ref('');
 const loading = ref(false);
 const cancellingId = ref('');
 const busy = computed(() => loading.value || Boolean(cancellingId.value));
+const todayDisplay = computed(() => {
+  const [y, m, d] = todayStr.value.split('-');
+  return `${d}/${m}/${y}`;
+});
 const data = ref({
   totalRevenue: 0,
   orderCount: 0,
@@ -30,33 +32,16 @@ let revenueSeq = 0;
 
 async function loadRevenue() {
   const seq = ++revenueSeq;
+  todayStr.value = getTodayStr();
   loading.value = true;
   try {
-    const res = await api.getRevenue(fromDate.value, toDate.value, selectedShiftId.value);
+    const res = await api.getRevenue(todayStr.value, todayStr.value, selectedShiftId.value);
     if (seq === revenueSeq) data.value = res;
   } catch (err) {
     if (seq === revenueSeq) alert(err.message);
   } finally {
     if (seq === revenueSeq) loading.value = false;
   }
-}
-
-function applyPreset(key) {
-  if (busy.value) return;
-  preset.value = key;
-  selectedShiftId.value = '';
-  const today = getTodayStr();
-  if (key === 'today') {
-    fromDate.value = today;
-    toDate.value = today;
-  } else if (key === '7d') {
-    fromDate.value = shiftDateStr(-6);
-    toDate.value = today;
-  } else if (key === '30d') {
-    fromDate.value = shiftDateStr(-29);
-    toDate.value = today;
-  }
-  loadRevenue();
 }
 
 function toggleShiftFilter(shiftId) {
@@ -98,33 +83,32 @@ function formatDateTime(iso) {
   });
 }
 
+const groupedOrders = computed(() => groupOrdersByShift(data.value.orders, data.value.shifts));
+
 onMounted(loadRevenue);
 </script>
 
 <template>
   <div class="page-container">
-    <!-- Filter Bar -->
+    <!-- Filter Bar (Chỉ xem trong ngày) -->
     <div class="panel card-pad" style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: center">
-      <div class="cat-pills">
-        <button class="pill" :class="{ active: preset === 'today' }" :disabled="busy" @click="applyPreset('today')">Hôm nay</button>
-        <button class="pill" :class="{ active: preset === '7d' }" :disabled="busy" @click="applyPreset('7d')">7 ngày</button>
-        <button class="pill" :class="{ active: preset === '30d' }" :disabled="busy" @click="applyPreset('30d')">30 ngày</button>
+      <div style="display: flex; align-items: center; gap: 8px">
+        <span class="pill active" style="display: inline-flex; align-items: center; gap: 6px; cursor: default">
+          <Calendar :size="14" /> Doanh thu hôm nay · {{ todayDisplay }}
+        </span>
       </div>
 
       <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
         <select v-model="selectedShiftId" class="input-sm" style="width: auto; max-width: 260px" :disabled="busy" @change="loadRevenue">
-          <option value="">Tất cả các ca (cả ngày)</option>
+          <option value="">Tất cả các ca hôm nay</option>
           <option v-for="s in data.shifts || []" :key="s.id" :value="s.id">
             {{ formatShiftLabel(s) }}
           </option>
         </select>
-        <input v-model="fromDate" type="date" class="input-sm" style="width: auto" :disabled="busy" @change="preset = 'custom'; selectedShiftId = ''" />
-        <span>→</span>
-        <input v-model="toDate" type="date" class="input-sm" style="width: auto" :disabled="busy" @change="preset = 'custom'; selectedShiftId = ''" />
         <button class="btn btn-primary btn-sm" @click="loadRevenue" :disabled="busy">
           <Loader2 v-if="loading" :size="14" class="spin" />
           <RefreshCw v-else :size="14" />
-          {{ loading ? 'Đang tải...' : 'Xem' }}
+          {{ loading ? 'Đang tải...' : 'Làm mới' }}
         </button>
       </div>
     </div>
@@ -261,40 +245,85 @@ onMounted(loadRevenue);
             <tr v-if="!data.orders.length">
               <td colspan="7" style="text-align: center; color: var(--text-muted)">Chưa có đơn hàng nào.</td>
             </tr>
-            <tr v-for="o in data.orders" :key="o.id">
-              <td><b>{{ o.orderCode }}</b></td>
-              <td>{{ formatDateTime(o.createdAt) }}</td>
-              <td>
-                <div v-for="(it, idx) in o.items" :key="idx" style="font-size: 13px">
-                  {{ it.quantity }}× {{ it.productName }} ({{ it.size }})
-                </div>
-              </td>
-              <td style="font-size: 13px">{{ o.orderType }} · {{ o.paymentMethod }}</td>
-              <td><b>{{ formatVnd(o.total) }}</b></td>
-              <td>
-                <span class="badge" :class="o.status === 'cancelled' ? 'badge-cancel' : 'badge-ok'">
-                  {{ o.status === 'cancelled' ? 'Đã hủy' : 'Hoàn thành' }}
-                </span>
-              </td>
-              <td>
-                <div style="display: flex; gap: 6px">
-                  <button class="btn btn-outline btn-sm" @click="emit('reprint-order', o)" title="Xem & In lại tem">
-                    <Printer :size="14" /> Tem
-                  </button>
-                  <button
-                    v-if="o.status !== 'cancelled'"
-                    class="btn btn-danger-soft btn-sm"
-                    :disabled="busy"
-                    @click="cancelOrder(o)"
-                    title="Hủy đơn (không tính vào doanh thu)"
-                  >
-                    <Loader2 v-if="cancellingId === o.id" :size="14" class="spin" />
-                    <Ban v-else :size="14" />
-                    {{ cancellingId === o.id ? 'Đang hủy...' : 'Hủy đơn' }}
-                  </button>
-                </div>
-              </td>
-            </tr>
+            <template v-for="group in groupedOrders" :key="group.key">
+              <tr style="background: #f8fafc">
+                <td colspan="7" style="padding: 8px 12px; border-top: 2px solid var(--border)">
+                  <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px">
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 13px">
+                      <b>{{ group.shift ? group.shift.shiftName : 'Đơn chưa gắn ca' }}</b>
+                      <span v-if="group.shift" style="color: var(--text-muted)">
+                        ({{ formatDateTime(group.shift.openedAt) }} → {{ group.shift.closedAt ? formatDateTime(group.shift.closedAt) : 'Đang bán' }})
+                      </span>
+                      <span v-if="group.shift?.closedBy || group.shift?.openedBy" style="color: var(--text-muted)">
+                        · NV: {{ group.shift.closedBy || group.shift.openedBy }}
+                      </span>
+                      <span
+                        v-if="group.shift"
+                        class="badge"
+                        :class="group.shift.status === 'open' ? 'badge-ok' : ''"
+                        :style="group.shift.status === 'closed' ? { background: '#e2e8f0', color: '#334155', fontSize: '11px' } : { fontSize: '11px' }"
+                      >
+                        {{ group.shift.status === 'open' ? 'Đang mở' : 'Đã chốt' }}
+                      </span>
+                    </div>
+                    <div style="font-size: 13px">
+                      <span v-if="group.shift" style="color: var(--text-muted); margin-right: 8px">
+                        <template v-if="group.shift.status === 'closed'">
+                          Két thực tế: <b>{{ formatVnd(group.shift.actualCash) }}</b> / {{ formatVnd(group.shift.expectedCash) }}
+                          <span
+                            v-if="group.shift.cashDiff !== 0"
+                            :style="{ color: group.shift.cashDiff > 0 ? '#0284c7' : '#dc2626', fontWeight: 600 }"
+                          >
+                            ({{ group.shift.cashDiff > 0 ? '+' : '' }}{{ formatVnd(group.shift.cashDiff) }})
+                          </span>
+                        </template>
+                        <template v-else>
+                          Két dự kiến: {{ formatVnd(group.shift.expectedCash) }}
+                        </template>
+                        ·
+                      </span>
+                      <span>{{ group.completedCount }} đơn</span>
+                      <span v-if="group.cancelledCount" style="color: var(--text-muted)"> (hủy: {{ group.cancelledCount }})</span>
+                      · <b style="color: var(--primary)">{{ formatVnd(group.totalRevenue) }}</b>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              <tr v-for="o in group.orders" :key="o.id">
+                <td><b>{{ o.orderCode }}</b></td>
+                <td>{{ formatDateTime(o.createdAt) }}</td>
+                <td>
+                  <div v-for="(it, idx) in o.items" :key="idx" style="font-size: 13px">
+                    {{ it.quantity }}× {{ it.productName }} ({{ it.size }})
+                  </div>
+                </td>
+                <td style="font-size: 13px">{{ o.orderType }} · {{ o.paymentMethod }}</td>
+                <td><b>{{ formatVnd(o.total) }}</b></td>
+                <td>
+                  <span class="badge" :class="o.status === 'cancelled' ? 'badge-cancel' : 'badge-ok'">
+                    {{ o.status === 'cancelled' ? 'Đã hủy' : 'Hoàn thành' }}
+                  </span>
+                </td>
+                <td>
+                  <div style="display: flex; gap: 6px">
+                    <button class="btn btn-outline btn-sm" @click="emit('reprint-order', o)" title="Xem & In lại tem">
+                      <Printer :size="14" /> Tem
+                    </button>
+                    <button
+                      v-if="o.status !== 'cancelled'"
+                      class="btn btn-danger-soft btn-sm"
+                      :disabled="busy"
+                      @click="cancelOrder(o)"
+                      title="Hủy đơn (không tính vào doanh thu)"
+                    >
+                      <Loader2 v-if="cancellingId === o.id" :size="14" class="spin" />
+                      <Ban v-else :size="14" />
+                      {{ cancellingId === o.id ? 'Đang hủy...' : 'Hủy đơn' }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>

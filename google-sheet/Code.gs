@@ -635,8 +635,90 @@ function getOrCreateSheet(ss, name, headers) {
   return sh;
 }
 
-function ensureSeeded() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function getMasterSpreadsheet() {
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+function getTargetSpreadsheet(spreadsheetId) {
+  const id = String(spreadsheetId || '').trim();
+  const ss = id ? SpreadsheetApp.openById(id) : getMasterSpreadsheet();
+  return ensureStoreSeeded(ss);
+}
+
+function ensureStoreSheet(ss) {
+  const sh = getOrCreateSheet(ss, 'Stores', STORE_HEADERS);
+  ensureSheetHeaders(sh, STORE_HEADERS);
+  if (sh.getLastRow() < 2) {
+    sh.appendRow([
+      'default',
+      'Nguyễn Chánh',
+      ss.getId(),
+      true,
+      new Date().toISOString()
+    ]);
+  }
+  return sh;
+}
+
+function ensureAdminSheet(ss) {
+  const sh = getOrCreateSheet(ss, 'Admins', ADMIN_HEADERS);
+  ensureSheetHeaders(sh, ADMIN_HEADERS);
+  if (sh.getLastRow() < 2) {
+    DEFAULT_USERS.forEach(u => {
+      sh.appendRow([
+        u.username,
+        u.password,
+        u.role,
+        u.storeId,
+        u.active !== false,
+        new Date().toISOString()
+      ]);
+    });
+  }
+  return sh;
+}
+
+function copyMenuFromDefaultStore(masterSs, targetSs) {
+  if (targetSs.getId() === masterSs.getId()) {
+    ensureStoreSeeded(targetSs);
+    return;
+  }
+  const stores = getStoresList(masterSs);
+  const defaultStore = stores.find(s => s.id === 'default') || stores[0];
+  let sourceSs = masterSs;
+  if (defaultStore && defaultStore.spreadsheetId && defaultStore.spreadsheetId !== masterSs.getId()) {
+    try {
+      sourceSs = SpreadsheetApp.openById(defaultStore.spreadsheetId);
+    } catch (_err) {
+      sourceSs = masterSs;
+    }
+  }
+  ensureStoreSeeded(sourceSs);
+
+  const menuSheets = ['Categories', 'Sizes', 'Products', 'Toppings'];
+  menuSheets.forEach(sheetName => {
+    const srcSh = sourceSs.getSheetByName(sheetName);
+    if (!srcSh || srcSh.getLastRow() === 0) return;
+    const vals = srcSh.getDataRange().getValues();
+    let dstSh = targetSs.getSheetByName(sheetName);
+    if (!dstSh) {
+      dstSh = targetSs.insertSheet(sheetName);
+    } else if (dstSh.getLastRow() > 0) {
+      return; // Không ghi đè nếu sheet đích đã có dữ liệu
+    }
+    dstSh.getRange(1, 1, vals.length, vals[0].length).setValues(vals);
+  });
+
+  // Xoá sheet mặc định trống ("Sheet1" / "Trang tính1") nếu có
+  const defaultEmpty = targetSs.getSheets().find(s =>
+    (s.getName() === 'Sheet1' || s.getName() === 'Trang tính1') && s.getLastRow() === 0
+  );
+  if (defaultEmpty && targetSs.getSheets().length > 1) {
+    targetSs.deleteSheet(defaultEmpty);
+  }
+}
+
+function ensureStoreSeeded(ss) {
   if (!ss.getSheetByName('Products')) {
     const catSh = getOrCreateSheet(ss, 'Categories', ['id', 'name']);
     SEED_DATA.categories.forEach(c => catSh.appendRow([c.id, c.name]));
@@ -654,6 +736,14 @@ function ensureSeeded() {
 
     SEED_DATA.orders.forEach(o => appendOrderRow(ss, o));
   }
+  return ss;
+}
+
+function ensureSeeded() {
+  const ss = getMasterSpreadsheet();
+  ensureStoreSeeded(ss);
+  ensureStoreSheet(ss);
+  ensureAdminSheet(ss);
   return ss;
 }
 
@@ -678,6 +768,25 @@ const SHIFT_HEADERS = [
   'closedBy', 'closedAt', 'actualCash', 'expectedCash', 'cashDiff',
   'totalOrders', 'cancelledOrders', 'totalRevenue', 'byPaymentJSON',
   'byOrderTypeJSON', 'note', 'status'
+];
+
+const STORE_HEADERS = ['id', 'name', 'spreadsheetId', 'active', 'createdAt'];
+const ADMIN_HEADERS = ['username', 'password', 'role', 'storeId', 'active', 'createdAt'];
+const DEFAULT_USERS = [
+  {
+    username: 'admin',
+    password: '0912Thien',
+    role: 'superadmin',
+    storeId: '*',
+    active: true
+  },
+  {
+    username: 'member',
+    password: '1234JQK@#$',
+    role: 'staff',
+    storeId: 'default',
+    active: true
+  }
 ];
 
 function ensureSheetHeaders(sh, headers) {
@@ -862,20 +971,40 @@ function getRevenuePayload(ss, from, to, shiftId) {
 
   const completed = rangeOrders.filter(o => o.status !== 'cancelled');
   let totalRevenue = 0, totalCups = 0;
-  const byPaymentMethod = {}, byOrderType = {}, prodMap = {};
+  const byPaymentMethod = {}, byOrderType = {}, prodMap = {}, dailyMap = {}, hourlyMap = {};
   completed.forEach(o => {
     totalRevenue += o.total;
     byPaymentMethod[o.paymentMethod] = (byPaymentMethod[o.paymentMethod] || 0) + o.total;
     byOrderType[o.orderType] = (byOrderType[o.orderType] || 0) + o.total;
+    if (!dailyMap[o.dateKey]) dailyMap[o.dateKey] = { date: o.dateKey, revenue: 0, orders: 0, cups: 0 };
+    dailyMap[o.dateKey].revenue += o.total;
+    dailyMap[o.dateKey].orders += 1;
+
+    let hourKey = null;
+    if (o.createdAt) {
+      const dt = new Date(o.createdAt);
+      if (!isNaN(dt.getTime())) {
+        hourKey = Number(Utilities.formatDate(dt, 'Asia/Ho_Chi_Minh', 'H'));
+      }
+    }
+    if (hourKey !== null) {
+      if (!hourlyMap[hourKey]) hourlyMap[hourKey] = { hour: hourKey, revenue: 0, orders: 0 };
+      hourlyMap[hourKey].revenue += o.total;
+      hourlyMap[hourKey].orders += 1;
+    }
+
     o.items.forEach(it => {
       const q = Number(it.quantity) || 1;
       totalCups += q;
+      dailyMap[o.dateKey].cups += q;
       if (!prodMap[it.productName]) prodMap[it.productName] = { name: it.productName, quantity: 0, revenue: 0 };
       prodMap[it.productName].quantity += q;
       prodMap[it.productName].revenue += (Number(it.unitPrice) || 0) * q;
     });
   });
   const topProducts = Object.values(prodMap).sort((a, b) => b.quantity - a.quantity || b.revenue - a.revenue);
+  const dailySeries = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
+  const hourlySeries = Object.values(hourlyMap).sort((a, b) => a.hour - b.hour);
   rangeOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   return {
@@ -884,34 +1013,295 @@ function getRevenuePayload(ss, from, to, shiftId) {
     cancelledCount: rangeOrders.length - completed.length,
     totalCups,
     avgOrderValue: completed.length ? Math.round(totalRevenue / completed.length) : 0,
-    byPaymentMethod, byOrderType, topProducts, orders: rangeOrders,
+    byPaymentMethod, byOrderType, topProducts, dailySeries, hourlySeries, orders: rangeOrders,
     shifts: getShiftsInRange(ss, from, to)
   };
 }
 
+// Đặt khóa API_SECRET trong Apps Script: Project Settings -> Script Properties -> API_SECRET
+function verifyApiSecret(providedSecret) {
+  const expected = PropertiesService.getScriptProperties().getProperty('API_SECRET') || '';
+  if (!expected) return true;
+  return String(providedSecret || '') === String(expected);
+}
+
+function isRowActive(val) {
+  return val === true || val === 'TRUE' || val === 'true' || val === '';
+}
+
+function getStoresList(masterSs) {
+  const sh = ensureStoreSheet(masterSs);
+  return readSheetObjects(sh).map(s => ({
+    id: String(s.id || '').trim(),
+    name: String(s.name || '').trim(),
+    spreadsheetId: String(s.spreadsheetId || '').trim(),
+    active: isRowActive(s.active),
+    createdAt: String(s.createdAt || '')
+  })).filter(s => s.id);
+}
+
+function getUsersList(masterSs) {
+  const sh = ensureAdminSheet(masterSs);
+  return readSheetObjects(sh).map(u => {
+    const rawRole = String(u.role || 'admin').trim();
+    const rawStoreId = String(u.storeId || '').trim();
+    const role = (rawRole === 'admin' && (!rawStoreId || rawStoreId === '*')) ? 'superadmin' : rawRole;
+    return {
+      username: String(u.username || '').trim(),
+      role,
+      storeId: role === 'superadmin' ? '*' : (rawStoreId || 'default'),
+      active: isRowActive(u.active),
+      createdAt: String(u.createdAt || '')
+    };
+  }).filter(u => u.username);
+}
+
 function doGet(e) {
-  const ss = ensureSeeded();
-  const action = (e && e.parameter && e.parameter.action) || 'menu';
+  const params = (e && e.parameter) || {};
+  if (!verifyApiSecret(params.secret)) {
+    return jsonOut({ error: 'Unauthorized' });
+  }
+  const masterSs = ensureSeeded();
+  const action = params.action || 'menu';
+  if (action === 'stores') return jsonOut({ stores: getStoresList(masterSs) });
+  if (action === 'users') return jsonOut({ users: getUsersList(masterSs) });
+
+  const ss = getTargetSpreadsheet(params.spreadsheetId);
   if (action === 'menu') return jsonOut(getMenuPayload(ss));
   if (action === 'currentShift') return jsonOut({ shift: getCurrentShift(ss) });
   if (action === 'shifts') {
     const today = Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
-    return jsonOut({ shifts: getShiftsInRange(ss, e.parameter.from || today, e.parameter.to || today) });
+    return jsonOut({ shifts: getShiftsInRange(ss, params.from || today, params.to || today) });
   }
   if (action === 'revenue') {
     const today = Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
-    return jsonOut(getRevenuePayload(ss, e.parameter.from || today, e.parameter.to || today, e.parameter.shiftId || ''));
+    return jsonOut(getRevenuePayload(ss, params.from || today, params.to || today, params.shiftId || ''));
   }
   return jsonOut({ ok: true });
 }
 
 function doPost(e) {
+  const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+  if (!verifyApiSecret(body.secret)) {
+    return jsonOut({ error: 'Unauthorized' });
+  }
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const ss = ensureSeeded();
-    const body = JSON.parse(e.postData.contents || '{}');
+    const masterSs = ensureSeeded();
     const action = body.action;
+
+    if (action === 'adminLogin') {
+      const username = String(body.username || '').trim();
+      const password = String(body.password || '');
+      if (!username || !password) {
+        return jsonOut({ error: 'Vui lòng nhập đầy đủ tài khoản và mật khẩu' });
+      }
+      const sh = ensureAdminSheet(masterSs);
+      const admins = readSheetObjects(sh);
+      const found = admins.find(a =>
+        String(a.username || '').trim() === username &&
+        String(a.password || '') === password &&
+        isRowActive(a.active)
+      );
+      if (!found) {
+        return jsonOut({ error: 'Sai tài khoản hoặc mật khẩu' });
+      }
+      const rawRole = String(found.role || 'admin').trim();
+      const rawStoreId = String(found.storeId || '').trim();
+      const role = (rawRole === 'admin' && (!rawStoreId || rawStoreId === '*')) ? 'superadmin' : rawRole;
+      const stores = getStoresList(masterSs);
+
+      if (role === 'superadmin') {
+        const firstActive = stores.find(s => s.active) || stores[0];
+        return jsonOut({
+          ok: true,
+          user: {
+            username: String(found.username).trim(),
+            role: 'superadmin',
+            storeId: '*',
+            storeName: 'Tất cả quán',
+            spreadsheetId: firstActive ? firstActive.spreadsheetId : masterSs.getId()
+          }
+        });
+      }
+
+      const targetStoreId = rawStoreId || 'default';
+      const store = stores.find(s => s.id === targetStoreId);
+      if (!store || !store.active) {
+        return jsonOut({ error: 'Quán của tài khoản này đang tạm ngưng hoặc chưa được cấu hình' });
+      }
+      return jsonOut({
+        ok: true,
+        user: {
+          username: String(found.username).trim(),
+          role,
+          storeId: store.id,
+          storeName: store.name,
+          spreadsheetId: store.spreadsheetId
+        }
+      });
+    }
+
+    if (action === 'createStore') {
+      const name = String(body.name || '').trim();
+      if (!name) return jsonOut({ error: 'Vui lòng nhập tên quán' });
+
+      const sh = ensureStoreSheet(masterSs);
+      const stores = getStoresList(masterSs);
+      const id = String(body.id || ('store-' + Utilities.getUuid().slice(0, 6))).trim();
+      if (stores.some(s => s.id === id)) {
+        return jsonOut({ error: 'Mã quán đã tồn tại' });
+      }
+
+      const staffUsername = String(body.staffUsername || '').trim();
+      const staffPassword = String(body.staffPassword || '');
+      const adminUsername = String(body.adminUsername || '').trim();
+      const adminPassword = String(body.adminPassword || '');
+
+      if (!staffUsername || staffPassword.length < 4) {
+        return jsonOut({ error: 'Vui lòng nhập tài khoản nhân viên và mật khẩu (>= 4 ký tự)' });
+      }
+      if (!adminUsername || adminPassword.length < 4) {
+        return jsonOut({ error: 'Vui lòng nhập tài khoản admin quán và mật khẩu (>= 4 ký tự)' });
+      }
+      if (staffUsername === adminUsername) {
+        return jsonOut({ error: 'Tài khoản nhân viên và tài khoản admin không được trùng nhau' });
+      }
+
+      const adminSh = ensureAdminSheet(masterSs);
+      const existingUsers = getUsersList(masterSs);
+      if (existingUsers.some(u => u.username === staffUsername)) {
+        return jsonOut({ error: 'Tài khoản nhân viên "' + staffUsername + '" đã tồn tại' });
+      }
+      if (existingUsers.some(u => u.username === adminUsername)) {
+        return jsonOut({ error: 'Tài khoản admin "' + adminUsername + '" đã tồn tại' });
+      }
+
+      let spreadsheetId = String(body.spreadsheetId || '').trim();
+      if (!spreadsheetId) {
+        const newSs = SpreadsheetApp.create('Rau Má Mix - ' + name);
+        copyMenuFromDefaultStore(masterSs, newSs);
+        spreadsheetId = newSs.getId();
+        try {
+          const masterParents = DriveApp.getFileById(masterSs.getId()).getParents();
+          if (masterParents.hasNext()) {
+            DriveApp.getFileById(spreadsheetId).moveTo(masterParents.next());
+          }
+        } catch (_err) {
+          // Bỏ qua nếu chưa cấp quyền DriveApp, file vẫn nằm ở My Drive
+        }
+      } else {
+        const targetSs = SpreadsheetApp.openById(spreadsheetId);
+        copyMenuFromDefaultStore(masterSs, targetSs);
+      }
+
+      const now = new Date().toISOString();
+      sh.appendRow([id, name, spreadsheetId, true, now]);
+      adminSh.appendRow([staffUsername, staffPassword, 'staff', id, true, now]);
+      adminSh.appendRow([adminUsername, adminPassword, 'admin', id, true, now]);
+
+      return jsonOut({
+        store: { id, name, spreadsheetId, active: true, createdAt: now },
+        users: [
+          { username: staffUsername, role: 'staff', storeId: id, active: true, createdAt: now },
+          { username: adminUsername, role: 'admin', storeId: id, active: true, createdAt: now }
+        ]
+      });
+    }
+
+    if (action === 'updateStore') {
+      const id = String(body.id || '').trim();
+      if (!id) return jsonOut({ error: 'Thiếu mã quán' });
+      const sh = ensureStoreSheet(masterSs);
+      const vals = sh.getDataRange().getValues();
+      const headers = vals[0].map(String);
+      const idCol = headers.indexOf('id');
+      for (let r = 1; r < vals.length; r++) {
+        if (String(vals[r][idCol]).trim() === id) {
+          if (body.name !== undefined) sh.getRange(r + 1, headers.indexOf('name') + 1).setValue(String(body.name).trim());
+          if (body.spreadsheetId !== undefined) sh.getRange(r + 1, headers.indexOf('spreadsheetId') + 1).setValue(String(body.spreadsheetId).trim());
+          if (body.active !== undefined) sh.getRange(r + 1, headers.indexOf('active') + 1).setValue(Boolean(body.active));
+          return jsonOut({ ok: true });
+        }
+      }
+      return jsonOut({ error: 'Không tìm thấy quán' });
+    }
+
+    if (action === 'createUser') {
+      const username = String(body.username || '').trim();
+      const password = String(body.password || '');
+      const role = String(body.role || 'staff').trim();
+      const storeId = role === 'superadmin' ? '*' : String(body.storeId || '').trim();
+      if (!username || password.length < 4) {
+        return jsonOut({ error: 'Tài khoản không được trống và mật khẩu tối thiểu 4 ký tự' });
+      }
+      if (role !== 'superadmin' && !storeId) {
+        return jsonOut({ error: 'Vui lòng chọn quán cho tài khoản này' });
+      }
+      const sh = ensureAdminSheet(masterSs);
+      const users = getUsersList(masterSs);
+      if (users.some(u => u.username === username)) {
+        return jsonOut({ error: 'Tên đăng nhập đã tồn tại' });
+      }
+      const now = new Date().toISOString();
+      sh.appendRow([username, password, role, storeId, true, now]);
+      return jsonOut({ user: { username, role, storeId, active: true, createdAt: now } });
+    }
+
+    if (action === 'updateUser') {
+      const username = String(body.username || '').trim();
+      if (!username) return jsonOut({ error: 'Thiếu tên đăng nhập' });
+      const sh = ensureAdminSheet(masterSs);
+      const vals = sh.getDataRange().getValues();
+      const headers = vals[0].map(String);
+      const userCol = headers.indexOf('username');
+      for (let r = 1; r < vals.length; r++) {
+        if (String(vals[r][userCol]).trim() === username) {
+          if (body.password && String(body.password).length >= 4) {
+            sh.getRange(r + 1, headers.indexOf('password') + 1).setValue(String(body.password));
+          }
+          if (body.role !== undefined) {
+            const nextRole = String(body.role).trim();
+            sh.getRange(r + 1, headers.indexOf('role') + 1).setValue(nextRole);
+            if (nextRole === 'superadmin') {
+              sh.getRange(r + 1, headers.indexOf('storeId') + 1).setValue('*');
+            }
+          }
+          if (body.storeId !== undefined && body.role !== 'superadmin') {
+            sh.getRange(r + 1, headers.indexOf('storeId') + 1).setValue(String(body.storeId).trim());
+          }
+          if (body.active !== undefined) {
+            sh.getRange(r + 1, headers.indexOf('active') + 1).setValue(Boolean(body.active));
+          }
+          return jsonOut({ ok: true });
+        }
+      }
+      return jsonOut({ error: 'Không tìm thấy tài khoản' });
+    }
+
+    if (action === 'adminChangePassword') {
+      const username = String(body.username || '').trim();
+      const currentPassword = String(body.currentPassword || '');
+      const newPassword = String(body.newPassword || '');
+      if (!username || !currentPassword || newPassword.length < 4) {
+        return jsonOut({ error: 'Mật khẩu mới phải có ít nhất 4 ký tự' });
+      }
+      const sh = ensureAdminSheet(masterSs);
+      const vals = sh.getDataRange().getValues();
+      const headers = vals[0].map(String);
+      const userCol = headers.indexOf('username');
+      const passCol = headers.indexOf('password');
+      for (let r = 1; r < vals.length; r++) {
+        if (String(vals[r][userCol]).trim() === username && String(vals[r][passCol]) === currentPassword) {
+          sh.getRange(r + 1, passCol + 1).setValue(newPassword);
+          return jsonOut({ ok: true });
+        }
+      }
+      return jsonOut({ error: 'Mật khẩu hiện tại không đúng' });
+    }
+
+    const ss = getTargetSpreadsheet(body.spreadsheetId);
 
     if (action === 'openShift') {
       const existing = getCurrentShift(ss);
@@ -952,6 +1342,9 @@ function doPost(e) {
     }
 
     if (action === 'closeShift') {
+      if (body.actualCash === '' || body.actualCash === undefined || body.actualCash === null || isNaN(Number(body.actualCash)) || Number(body.actualCash) < 0) {
+        return jsonOut({ error: 'Vui lòng nhập số tiền mặt thực tế đếm được trong két' });
+      }
       const sh = getOrCreateSheet(ss, 'Shifts', SHIFT_HEADERS);
       ensureSheetHeaders(sh, SHIFT_HEADERS);
       const vals = sh.getDataRange().getValues();
@@ -1016,17 +1409,37 @@ function doPost(e) {
       if (!currentShift) {
         return jsonOut({ error: 'Chưa mở ca làm việc. Vui lòng bấm "Mở ca" trước khi tạo đơn!' });
       }
-      const now = new Date();
+      const parsedTime = body.createdAt ? new Date(body.createdAt) : new Date();
+      const now = isNaN(parsedTime.getTime()) ? new Date() : parsedTime;
       const dateKey = Utilities.formatDate(now, 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
       const sh = getOrCreateSheet(ss, getOrderSheetName(dateKey), ORDER_HEADERS);
       ensureSheetHeaders(sh, ORDER_HEADERS);
       const rows = readSheetObjects(sh);
+      const clientId = body.id ? String(body.id) : '';
+      if (clientId) {
+        const dup = rows.find(r => String(r.id) === clientId);
+        if (dup) {
+          return jsonOut({
+            id: String(dup.id),
+            orderCode: String(dup.orderCode),
+            createdAt: String(dup.createdAt),
+            dateKey: formatDateKey(dup.dateKey),
+            orderType: String(dup.orderType),
+            paymentMethod: String(dup.paymentMethod),
+            items: JSON.parse(dup.itemsJSON || '[]'),
+            total: Number(dup.total) || 0,
+            note: String(dup.note || ''),
+            status: String(dup.status || 'completed'),
+            shiftId: String(dup.shiftId || '')
+          });
+        }
+      }
       const todayCount = rows.filter(r => formatDateKey(r.dateKey) === dateKey).length;
       const items = body.items || [];
       const subtotal = items.reduce((s, it) => s + Number(it.unitPrice) * Number(it.quantity), 0);
       const order = {
-        id: Utilities.getUuid(),
-        orderCode: '#' + String(todayCount + 1).padStart(3, '0'),
+        id: clientId || Utilities.getUuid(),
+        orderCode: body.orderCode ? String(body.orderCode) : '#' + String(todayCount + 1).padStart(3, '0'),
         createdAt: now.toISOString(),
         dateKey,
         orderType: body.orderType || 'Mang về',

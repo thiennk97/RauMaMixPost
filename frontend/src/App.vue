@@ -1,7 +1,8 @@
 <script setup>
-import { ref, onMounted, nextTick } from 'vue';
-import { ShoppingBag, BarChart3, Usb, Printer } from 'lucide-vue-next';
-import { api, formatVnd } from './api.js';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ShoppingBag, BarChart3, Usb, Printer, Loader2, AlertTriangle, LogOut, ShieldCheck } from 'lucide-vue-next';
+import { api, formatVnd, getSavedUser, setSavedUser, setAdminToken } from './api.js';
+import { pendingCount, failedCount, resumeOrderQueue, retryFailedOrders } from './orderQueue.js';
 import {
   isWebUsbSupported,
   connectUsbPrinter,
@@ -16,10 +17,87 @@ import {
 } from './usbPrinter.js';
 import PosView from './components/PosView.vue';
 import RevenueView from './components/RevenueView.vue';
+import AdminView from './components/AdminView.vue';
 import LabelPrinter from './components/LabelPrinter.vue';
 import ShiftModal from './components/ShiftModal.vue';
 
+function checkIsAdminRoute() {
+  if (typeof window === 'undefined') return false;
+  const p = window.location.pathname || '/';
+  const h = window.location.hash || '';
+  return p === '/admin' || p.startsWith('/admin/') || h === '#/admin' || h.startsWith('#/admin/');
+}
+
+const isAdminPage = ref(checkIsAdminRoute());
 const activeTab = ref('pos');
+const currentUser = ref(getSavedUser());
+const posUsername = ref('');
+const posPassword = ref('');
+const posLoginLoading = ref(false);
+const posLoginError = ref('');
+
+async function handlePosLogin() {
+  posLoginError.value = '';
+  if (!posUsername.value.trim() || !posPassword.value) {
+    posLoginError.value = 'Vui lòng nhập đầy đủ tài khoản và mật khẩu';
+    return;
+  }
+  posLoginLoading.value = true;
+  try {
+    const res = await api.login(posUsername.value.trim(), posPassword.value);
+    if (!res.token) throw new Error('Không nhận được phiên đăng nhập');
+    setAdminToken(res.token);
+    setSavedUser(res.user);
+    currentUser.value = res.user;
+    posPassword.value = '';
+    loadMenu();
+    loadCurrentShift();
+    resumeOrderQueue(loadCurrentShift);
+  } catch (err) {
+    posLoginError.value = err.message || 'Đăng nhập thất bại';
+  } finally {
+    posLoginLoading.value = false;
+  }
+}
+
+function handlePosLogout() {
+  currentUser.value = null;
+  setAdminToken('');
+  setSavedUser(null);
+  categories.value = [];
+  products.value = [];
+  toppings.value = [];
+  currentShift.value = null;
+}
+
+function goAdmin() {
+  if (typeof window !== 'undefined') {
+    window.history.pushState({}, '', '/admin');
+  }
+  isAdminPage.value = true;
+}
+
+function goPos() {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+    window.history.pushState({}, '', '/');
+  }
+  currentUser.value = getSavedUser();
+  isAdminPage.value = false;
+  if (currentUser.value) {
+    if (!products.value.length) loadMenu();
+    loadCurrentShift();
+  }
+}
+
+function onPopState() {
+  const nextAdmin = checkIsAdminRoute();
+  currentUser.value = getSavedUser();
+  isAdminPage.value = nextAdmin;
+  if (!nextAdmin && currentUser.value && !products.value.length) {
+    loadMenu();
+    loadCurrentShift();
+  }
+}
 const categories = ref([]);
 const sizes = ref([]);
 const products = ref([]);
@@ -63,6 +141,7 @@ function getUsbOpts() {
 }
 
 async function loadMenu() {
+  if (!currentUser.value) return;
   menuLoading.value = true;
   try {
     const res = await api.getMenu();
@@ -71,6 +150,10 @@ async function loadMenu() {
     products.value = res.products || [];
     toppings.value = res.toppings || [];
   } catch (err) {
+    if (err.status === 401) {
+      handlePosLogout();
+      posLoginError.value = 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại';
+    }
     console.error(err);
   } finally {
     menuLoading.value = false;
@@ -170,7 +253,14 @@ async function triggerPrint(order, previewOnly = false) {
 }
 
 function handleOrderCreated({ order, shouldPrint }) {
-  loadCurrentShift();
+  // Cập nhật tạm số đơn & doanh thu ca ngay trên giao diện; khi lưu ngầm xong sẽ tự đồng bộ lại từ server
+  if (currentShift.value) {
+    currentShift.value = {
+      ...currentShift.value,
+      totalOrders: (Number(currentShift.value.totalOrders) || 0) + 1,
+      totalRevenue: (Number(currentShift.value.totalRevenue) || 0) + (Number(order.total) || 0)
+    };
+  }
   if (shouldPrint) {
     triggerPrint(order, false);
   }
@@ -210,19 +300,81 @@ async function printFromPreview() {
 }
 
 onMounted(async () => {
-  loadMenu();
-  loadCurrentShift();
-  await autoReconnectUsbPrinter();
-  usbPrinterName.value = getConnectedPrinterName();
+  window.addEventListener('popstate', onPopState);
+  window.addEventListener('hashchange', onPopState);
+  if (!isAdminPage.value && currentUser.value) {
+    loadMenu();
+    loadCurrentShift();
+    resumeOrderQueue(loadCurrentShift);
+    await autoReconnectUsbPrinter();
+    usbPrinterName.value = getConnectedPrinterName();
+  }
+});
+
+onUnmounted(() => {
+  window.removeEventListener('popstate', onPopState);
+  window.removeEventListener('hashchange', onPopState);
 });
 </script>
 
 <template>
+  <AdminView v-if="isAdminPage" @go-pos="goPos" />
+
+  <div v-else-if="!currentUser" class="admin-login-shell">
+    <div class="admin-login-card panel">
+      <div class="admin-login-header">
+        <div class="brand-badge" style="width: 44px; height: 44px; font-size: 16px">RM</div>
+        <div>
+          <h2 style="margin: 0; font-size: 19px">Rau Má Mix POS</h2>
+          <p style="margin: 2px 0 0; font-size: 13px; color: var(--text-muted)">
+            Đăng nhập tài khoản quán để bắt đầu bán hàng
+          </p>
+        </div>
+      </div>
+
+      <form class="admin-login-form" @submit.prevent="handlePosLogin">
+        <div>
+          <label class="field-label">Tài khoản</label>
+          <input
+            v-model="posUsername"
+            type="text"
+            class="input-sm"
+            placeholder="Nhập tài khoản (VD: member)"
+            autocomplete="username"
+            :disabled="posLoginLoading"
+          />
+        </div>
+
+        <div>
+          <label class="field-label">Mật khẩu</label>
+          <input
+            v-model="posPassword"
+            type="password"
+            class="input-sm"
+            placeholder="Nhập mật khẩu"
+            autocomplete="current-password"
+            :disabled="posLoginLoading"
+          />
+        </div>
+
+        <div v-if="posLoginError" class="admin-error-box">
+          {{ posLoginError }}
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; height: 40px" :disabled="posLoginLoading">
+          <Loader2 v-if="posLoginLoading" :size="16" class="spin" />
+          <span>{{ posLoginLoading ? 'Đang đăng nhập...' : 'Đăng nhập POS' }}</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <template v-else>
   <div class="app-shell">
     <header class="topbar">
       <div class="brand">
         <div class="brand-badge">RM</div>
-        <span>Rau Má Mix POS</span>
+        <span>Rau Má Mix · {{ currentUser.storeName || 'POS' }}</span>
       </div>
 
       <nav class="nav-tabs">
@@ -230,11 +382,27 @@ onMounted(async () => {
           <ShoppingBag :size="16" /> Bấm đơn
         </button>
         <button class="nav-tab" :class="{ active: activeTab === 'revenue' }" @click="activeTab = 'revenue'">
-          <BarChart3 :size="16" /> Doanh thu
+          <BarChart3 :size="16" /> Doanh thu hôm nay
         </button>
       </nav>
 
       <div class="topbar-right">
+        <span
+          v-if="pendingCount > 0"
+          class="badge badge-ok"
+          style="display: inline-flex; align-items: center; gap: 4px; font-size: 12px"
+          title="Đang lưu đơn ngầm lên Google Sheet"
+        >
+          <Loader2 :size="12" class="spin" /> Lưu {{ pendingCount }} đơn...
+        </span>
+        <button
+          v-if="failedCount > 0"
+          class="btn btn-danger-soft btn-sm"
+          @click="retryFailedOrders"
+          title="Có đơn chưa lưu được do mất mạng — bấm để gửi lại"
+        >
+          <AlertTriangle :size="13" /> Lỗi {{ failedCount }} đơn · Gửi lại
+        </button>
         <select
           :value="printMode"
           @change="setPrintMode($event.target.value)"
@@ -296,6 +464,21 @@ onMounted(async () => {
           <option value="40x30">40×30mm</option>
           <option value="50x30">50×30mm</option>
         </select>
+        <button
+          v-if="currentUser.role === 'admin' || currentUser.role === 'superadmin'"
+          class="btn btn-outline btn-sm"
+          @click="goAdmin"
+          title="Mở trang Quản trị"
+        >
+          <ShieldCheck :size="14" /> Quản trị
+        </button>
+        <button
+          class="btn btn-danger-soft btn-sm"
+          @click="handlePosLogout"
+          :title="`Đăng xuất (${currentUser.username})`"
+        >
+          <LogOut :size="14" /> {{ currentUser.username }}
+        </button>
       </div>
     </header>
 
@@ -334,4 +517,5 @@ onMounted(async () => {
     @close="showLabelPreview = false"
     @print="printFromPreview"
   />
+  </template>
 </template>

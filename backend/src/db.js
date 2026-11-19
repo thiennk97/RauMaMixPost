@@ -21,6 +21,15 @@ const DEFAULT_SIZES = [
   { id: 'sz-l', name: 'Size L', shortName: 'L', extraPrice: 5000 }
 ];
 
+const DEFAULT_STORES = [
+  { id: 'default', name: 'Nguyễn Chánh', spreadsheetId: '', active: true, createdAt: new Date().toISOString() }
+];
+
+const DEFAULT_ADMINS = [
+  { username: 'admin', password: '0912Thien', role: 'superadmin', storeId: '*', active: true },
+  { username: 'member', password: '1234JQK@#$', role: 'staff', storeId: 'default', active: true }
+];
+
 const DEFAULT_DATA = {
   categories: DEFAULT_CATEGORIES,
   sizes: DEFAULT_SIZES,
@@ -93,6 +102,23 @@ function normalizeDb(db) {
   }
   if (!Array.isArray(db.shifts)) {
     db.shifts = [];
+  }
+  if (!Array.isArray(db.stores) || !db.stores.length) {
+    db.stores = DEFAULT_STORES.map((s) => ({ ...s }));
+  }
+  if (!Array.isArray(db.admins) || !db.admins.length) {
+    db.admins = DEFAULT_ADMINS.map((a) => ({ ...a }));
+  } else {
+    db.admins = db.admins.map((a) => {
+      const rawRole = a.role || 'admin';
+      const rawStoreId = a.storeId || '';
+      const role = rawRole === 'admin' && (!rawStoreId || rawStoreId === '*') ? 'superadmin' : rawRole;
+      return {
+        ...a,
+        role,
+        storeId: role === 'superadmin' ? '*' : (rawStoreId || 'default')
+      };
+    });
   }
   db.products = (db.products || []).map((p) => ({
     ...p,

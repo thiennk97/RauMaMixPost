@@ -1,7 +1,8 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { Search, Plus, Minus, Trash2, Printer, CheckCircle2, X, Play, Lock, Loader2 } from 'lucide-vue-next';
-import { api, formatVnd } from '../api.js';
+import { formatVnd } from '../api.js';
+import { enqueueOrder, generateClientOrderId, nextClientOrderCode } from '../orderQueue.js';
 
 const props = defineProps({
   categories: { type: Array, default: () => [] },
@@ -205,37 +206,53 @@ function clearCart() {
   cashReceived.value = 0;
 }
 
-async function submitOrder(shouldPrint = true) {
+function submitOrder(shouldPrint = true) {
   if (!cart.value.length || submitting.value || props.shiftLoading) return;
   if (!props.currentShift) {
     emit('open-shift');
     return;
   }
   submitting.value = true;
-  // Chốt lại kênh + danh sách món tại thời điểm bấm, tránh xóa nhầm giỏ nếu đổi kênh khi đang gửi
   const channel = orderType.value;
   const submittedItems = cart.value.map((it) => ({ ...it }));
   const total = cartTotal.value;
-  try {
-    const order = await api.createOrder({
-      items: submittedItems,
-      orderType: channel,
-      paymentMethod: paymentMethod.value,
-      cashReceived: paymentMethod.value === 'Tiền mặt' && cashReceived.value > 0
-        ? cashReceived.value
-        : total
-    });
-    // Xóa đúng giỏ của kênh vừa gửi (kể cả khi đã chuyển sang kênh khác trong lúc chờ)
-    cartsByChannel.value[channel] = [];
-    if (channel === orderType.value) cashReceived.value = 0;
-    toast.value = `Đã tạo đơn ${order.orderCode} (${formatVnd(order.total)})`;
-    setTimeout(() => { toast.value = ''; }, 3500);
-    emit('order-created', { order, shouldPrint });
-  } catch (err) {
-    alert(err.message);
-  } finally {
-    submitting.value = false;
-  }
+  const pm = paymentMethod.value;
+  const cash = pm === 'Tiền mặt' && cashReceived.value > 0 ? cashReceived.value : total;
+  const nowIso = new Date().toISOString();
+
+  const order = {
+    id: generateClientOrderId(),
+    orderCode: nextClientOrderCode(props.currentShift),
+    createdAt: nowIso,
+    orderType: channel,
+    paymentMethod: pm,
+    items: submittedItems,
+    total,
+    cashReceived: cash,
+    status: 'completed',
+    shiftId: props.currentShift.id
+  };
+
+  // Xóa giỏ & in tem ngay lập tức, không chờ Google Sheet
+  cartsByChannel.value[channel] = [];
+  if (channel === orderType.value) cashReceived.value = 0;
+  toast.value = `Đã tạo đơn ${order.orderCode} (${formatVnd(order.total)})`;
+  setTimeout(() => { toast.value = ''; }, 3000);
+  emit('order-created', { order, shouldPrint });
+
+  // Lưu ngầm lên Backend / Google Sheet (có tự động thử lại nếu lỗi mạng)
+  enqueueOrder({
+    id: order.id,
+    orderCode: order.orderCode,
+    createdAt: order.createdAt,
+    items: submittedItems,
+    orderType: channel,
+    paymentMethod: pm,
+    cashReceived: cash
+  });
+
+  // Chống chạm đúp cảm ứng (300ms)
+  setTimeout(() => { submitting.value = false; }, 300);
 }
 </script>
 
