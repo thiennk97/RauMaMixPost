@@ -660,19 +660,32 @@ function ensureStoreSheet(ss) {
   return sh;
 }
 
+function appendRowByHeaders(sh, defaultHeaders, rowObj) {
+  ensureSheetHeaders(sh, defaultHeaders);
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  sh.appendRow(headers.map(h => (rowObj[h] !== undefined ? rowObj[h] : '')));
+}
+
+function ensureStoreAdminSheet(ss) {
+  const sh = getOrCreateSheet(ss, 'Admins', STORE_ADMIN_HEADERS);
+  ensureSheetHeaders(sh, STORE_ADMIN_HEADERS);
+  return sh;
+}
+
 function ensureAdminSheet(ss) {
   const sh = getOrCreateSheet(ss, 'Admins', ADMIN_HEADERS);
   ensureSheetHeaders(sh, ADMIN_HEADERS);
   if (sh.getLastRow() < 2) {
+    const now = new Date().toISOString();
     DEFAULT_USERS.forEach(u => {
-      sh.appendRow([
-        u.username,
-        u.password,
-        u.role,
-        u.storeId,
-        u.active !== false,
-        new Date().toISOString()
-      ]);
+      appendRowByHeaders(sh, ADMIN_HEADERS, {
+        username: u.username,
+        password: u.password,
+        role: u.role,
+        storeId: u.storeId,
+        active: u.active !== false,
+        createdAt: now
+      });
     });
   }
   return sh;
@@ -771,6 +784,7 @@ const SHIFT_HEADERS = [
 ];
 
 const STORE_HEADERS = ['id', 'name', 'spreadsheetId', 'active', 'createdAt'];
+const STORE_ADMIN_HEADERS = ['username', 'password', 'role', 'active', 'createdAt'];
 const ADMIN_HEADERS = ['username', 'password', 'role', 'storeId', 'active', 'createdAt'];
 const DEFAULT_USERS = [
   {
@@ -1041,19 +1055,48 @@ function getStoresList(masterSs) {
 }
 
 function getUsersList(masterSs) {
-  const sh = ensureAdminSheet(masterSs);
-  return readSheetObjects(sh).map(u => {
+  const result = [];
+  const masterId = masterSs.getId();
+  const masterSh = ensureAdminSheet(masterSs);
+  readSheetObjects(masterSh).forEach(u => {
+    const username = String(u.username || '').trim();
+    if (!username) return;
     const rawRole = String(u.role || 'admin').trim();
     const rawStoreId = String(u.storeId || '').trim();
     const role = (rawRole === 'admin' && (!rawStoreId || rawStoreId === '*')) ? 'superadmin' : rawRole;
-    return {
-      username: String(u.username || '').trim(),
+    result.push({
+      username,
       role,
       storeId: role === 'superadmin' ? '*' : (rawStoreId || 'default'),
       active: isRowActive(u.active),
       createdAt: String(u.createdAt || '')
-    };
-  }).filter(u => u.username);
+    });
+  });
+
+  const stores = getStoresList(masterSs);
+  stores.forEach(st => {
+    if (!st.spreadsheetId || st.spreadsheetId === masterId) return;
+    try {
+      const storeSs = SpreadsheetApp.openById(st.spreadsheetId);
+      const stAdminSh = storeSs.getSheetByName('Admins');
+      if (!stAdminSh || stAdminSh.getLastRow() < 2) return;
+      readSheetObjects(stAdminSh).forEach(u => {
+        const username = String(u.username || '').trim();
+        if (!username) return;
+        result.push({
+          username,
+          role: String(u.role || 'staff').trim(),
+          storeId: st.id,
+          active: isRowActive(u.active),
+          createdAt: String(u.createdAt || '')
+        });
+      });
+    } catch (_err) {
+      // Bỏ qua nếu không mở được sheet quán
+    }
+  });
+
+  return result;
 }
 
 function doGet(e) {
@@ -1097,50 +1140,86 @@ function doPost(e) {
       if (!username || !password) {
         return jsonOut({ error: 'Vui lòng nhập đầy đủ tài khoản và mật khẩu' });
       }
-      const sh = ensureAdminSheet(masterSs);
-      const admins = readSheetObjects(sh);
-      const found = admins.find(a =>
+      const stores = getStoresList(masterSs);
+      const masterId = masterSs.getId();
+
+      // 1. Kiểm tra trên Sheet tổng (superadmin & các tài khoản của quán mặc định)
+      const masterSh = ensureAdminSheet(masterSs);
+      const masterFound = readSheetObjects(masterSh).find(a =>
         String(a.username || '').trim() === username &&
         String(a.password || '') === password &&
         isRowActive(a.active)
       );
-      if (!found) {
-        return jsonOut({ error: 'Sai tài khoản hoặc mật khẩu' });
-      }
-      const rawRole = String(found.role || 'admin').trim();
-      const rawStoreId = String(found.storeId || '').trim();
-      const role = (rawRole === 'admin' && (!rawStoreId || rawStoreId === '*')) ? 'superadmin' : rawRole;
-      const stores = getStoresList(masterSs);
+      if (masterFound) {
+        const rawRole = String(masterFound.role || 'admin').trim();
+        const rawStoreId = String(masterFound.storeId || '').trim();
+        const role = (rawRole === 'admin' && (!rawStoreId || rawStoreId === '*')) ? 'superadmin' : rawRole;
 
-      if (role === 'superadmin') {
-        const firstActive = stores.find(s => s.active) || stores[0];
+        if (role === 'superadmin') {
+          const firstActive = stores.find(s => s.active) || stores[0];
+          return jsonOut({
+            ok: true,
+            user: {
+              username: String(masterFound.username).trim(),
+              role: 'superadmin',
+              storeId: '*',
+              storeName: 'Tất cả quán',
+              spreadsheetId: firstActive ? firstActive.spreadsheetId : masterId
+            }
+          });
+        }
+
+        const targetStoreId = rawStoreId || 'default';
+        const store = stores.find(s => s.id === targetStoreId);
+        if (!store || !store.active) {
+          return jsonOut({ error: 'Quán của tài khoản này đang tạm ngưng hoặc chưa được cấu hình' });
+        }
         return jsonOut({
           ok: true,
           user: {
-            username: String(found.username).trim(),
-            role: 'superadmin',
-            storeId: '*',
-            storeName: 'Tất cả quán',
-            spreadsheetId: firstActive ? firstActive.spreadsheetId : masterSs.getId()
+            username: String(masterFound.username).trim(),
+            role,
+            storeId: store.id,
+            storeName: store.name,
+            spreadsheetId: store.spreadsheetId
           }
         });
       }
 
-      const targetStoreId = rawStoreId || 'default';
-      const store = stores.find(s => s.id === targetStoreId);
-      if (!store || !store.active) {
-        return jsonOut({ error: 'Quán của tài khoản này đang tạm ngưng hoặc chưa được cấu hình' });
-      }
-      return jsonOut({
-        ok: true,
-        user: {
-          username: String(found.username).trim(),
-          role,
-          storeId: store.id,
-          storeName: store.name,
-          spreadsheetId: store.spreadsheetId
+      // 2. Kiểm tra trong tab Admins của từng Sheet quán
+      for (let i = 0; i < stores.length; i++) {
+        const st = stores[i];
+        if (!st.spreadsheetId || st.spreadsheetId === masterId) continue;
+        try {
+          const storeSs = SpreadsheetApp.openById(st.spreadsheetId);
+          const stAdminSh = storeSs.getSheetByName('Admins');
+          if (!stAdminSh || stAdminSh.getLastRow() < 2) continue;
+          const storeFound = readSheetObjects(stAdminSh).find(a =>
+            String(a.username || '').trim() === username &&
+            String(a.password || '') === password &&
+            isRowActive(a.active)
+          );
+          if (storeFound) {
+            if (!st.active) {
+              return jsonOut({ error: 'Quán của tài khoản này đang tạm ngưng hoặc chưa được cấu hình' });
+            }
+            return jsonOut({
+              ok: true,
+              user: {
+                username: String(storeFound.username).trim(),
+                role: String(storeFound.role || 'staff').trim(),
+                storeId: st.id,
+                storeName: st.name,
+                spreadsheetId: st.spreadsheetId
+              }
+            });
+          }
+        } catch (_err) {
+          // Bỏ qua nếu không đọc được sheet quán
         }
-      });
+      }
+
+      return jsonOut({ error: 'Sai tài khoản hoặc mật khẩu' });
     }
 
     if (action === 'createStore') {
@@ -1179,10 +1258,11 @@ function doPost(e) {
       }
 
       let spreadsheetId = String(body.spreadsheetId || '').trim();
+      let targetSs;
       if (!spreadsheetId) {
-        const newSs = SpreadsheetApp.create('Rau Má Mix - ' + name);
-        copyMenuFromDefaultStore(masterSs, newSs);
-        spreadsheetId = newSs.getId();
+        targetSs = SpreadsheetApp.create('Rau Má Mix - ' + name);
+        copyMenuFromDefaultStore(masterSs, targetSs);
+        spreadsheetId = targetSs.getId();
         try {
           const masterParents = DriveApp.getFileById(masterSs.getId()).getParents();
           if (masterParents.hasNext()) {
@@ -1192,14 +1272,33 @@ function doPost(e) {
           // Bỏ qua nếu chưa cấp quyền DriveApp, file vẫn nằm ở My Drive
         }
       } else {
-        const targetSs = SpreadsheetApp.openById(spreadsheetId);
+        targetSs = SpreadsheetApp.openById(spreadsheetId);
         copyMenuFromDefaultStore(masterSs, targetSs);
       }
 
       const now = new Date().toISOString();
-      sh.appendRow([id, name, spreadsheetId, true, now]);
-      adminSh.appendRow([staffUsername, staffPassword, 'staff', id, true, now]);
-      adminSh.appendRow([adminUsername, adminPassword, 'admin', id, true, now]);
+      appendRowByHeaders(sh, STORE_HEADERS, { id, name, spreadsheetId, active: true, createdAt: now });
+
+      const storeAdminSh = targetSs.getId() === masterSs.getId()
+        ? adminSh
+        : ensureStoreAdminSheet(targetSs);
+      const rowHeaders = targetSs.getId() === masterSs.getId() ? ADMIN_HEADERS : STORE_ADMIN_HEADERS;
+      appendRowByHeaders(storeAdminSh, rowHeaders, {
+        username: staffUsername,
+        password: staffPassword,
+        role: 'staff',
+        storeId: id,
+        active: true,
+        createdAt: now
+      });
+      appendRowByHeaders(storeAdminSh, rowHeaders, {
+        username: adminUsername,
+        password: adminPassword,
+        role: 'admin',
+        storeId: id,
+        active: true,
+        createdAt: now
+      });
 
       return jsonOut({
         store: { id, name, spreadsheetId, active: true, createdAt: now },
@@ -1228,6 +1327,61 @@ function doPost(e) {
       return jsonOut({ error: 'Không tìm thấy quán' });
     }
 
+    if (action === 'deleteStore') {
+      const id = String(body.id || '').trim();
+      if (!id) return jsonOut({ error: 'Thiếu mã quán' });
+      if (id === 'default') {
+        return jsonOut({ error: 'Không thể xóa quán mặc định' });
+      }
+      const sh = ensureStoreSheet(masterSs);
+      const vals = sh.getDataRange().getValues();
+      const headers = vals[0].map(String);
+      const idCol = headers.indexOf('id');
+      const ssIdCol = headers.indexOf('spreadsheetId');
+      let targetSpreadsheetId = '';
+      let foundRow = -1;
+      for (let r = 1; r < vals.length; r++) {
+        if (String(vals[r][idCol]).trim() === id) {
+          foundRow = r + 1;
+          targetSpreadsheetId = ssIdCol !== -1 ? String(vals[r][ssIdCol] || '').trim() : '';
+          break;
+        }
+      }
+      if (foundRow === -1) {
+        return jsonOut({ error: 'Không tìm thấy quán' });
+      }
+      if (targetSpreadsheetId && targetSpreadsheetId === masterSs.getId()) {
+        return jsonOut({ error: 'Không thể xóa quán đang dùng chung Sheet tổng' });
+      }
+
+      // Xóa dòng quán trong tab Stores
+      sh.deleteRow(foundRow);
+
+      // Xóa các tài khoản cũ còn sót trên Sheet tổng gắn với storeId này (nếu có)
+      const masterAdminSh = ensureAdminSheet(masterSs);
+      const adminVals = masterAdminSh.getDataRange().getValues();
+      const adminHeaders = adminVals[0].map(String);
+      const storeCol = adminHeaders.indexOf('storeId');
+      if (storeCol !== -1) {
+        for (let r = adminVals.length - 1; r >= 1; r--) {
+          if (String(adminVals[r][storeCol] || '').trim() === id) {
+            masterAdminSh.deleteRow(r + 1);
+          }
+        }
+      }
+
+      // Chuyển file Google Sheet của quán vào thùng rác
+      if (targetSpreadsheetId) {
+        try {
+          DriveApp.getFileById(targetSpreadsheetId).setTrashed(true);
+        } catch (_err) {
+          // Bỏ qua nếu file đã bị xóa trước đó
+        }
+      }
+
+      return jsonOut({ ok: true });
+    }
+
     if (action === 'createUser') {
       const username = String(body.username || '').trim();
       const password = String(body.password || '');
@@ -1239,42 +1393,76 @@ function doPost(e) {
       if (role !== 'superadmin' && !storeId) {
         return jsonOut({ error: 'Vui lòng chọn quán cho tài khoản này' });
       }
-      const sh = ensureAdminSheet(masterSs);
       const users = getUsersList(masterSs);
       if (users.some(u => u.username === username)) {
         return jsonOut({ error: 'Tên đăng nhập đã tồn tại' });
       }
       const now = new Date().toISOString();
-      sh.appendRow([username, password, role, storeId, true, now]);
+      if (role === 'superadmin') {
+        const sh = ensureAdminSheet(masterSs);
+        appendRowByHeaders(sh, ADMIN_HEADERS, { username, password, role, storeId: '*', active: true, createdAt: now });
+        return jsonOut({ user: { username, role, storeId: '*', active: true, createdAt: now } });
+      }
+
+      const stores = getStoresList(masterSs);
+      const store = stores.find(s => s.id === storeId);
+      if (!store) {
+        return jsonOut({ error: 'Không tìm thấy quán' });
+      }
+      const targetSs = store.spreadsheetId && store.spreadsheetId !== masterSs.getId()
+        ? SpreadsheetApp.openById(store.spreadsheetId)
+        : masterSs;
+      const isMaster = targetSs.getId() === masterSs.getId();
+      const sh = isMaster ? ensureAdminSheet(masterSs) : ensureStoreAdminSheet(targetSs);
+      appendRowByHeaders(sh, isMaster ? ADMIN_HEADERS : STORE_ADMIN_HEADERS, {
+        username,
+        password,
+        role,
+        storeId,
+        active: true,
+        createdAt: now
+      });
       return jsonOut({ user: { username, role, storeId, active: true, createdAt: now } });
     }
 
     if (action === 'updateUser') {
       const username = String(body.username || '').trim();
       if (!username) return jsonOut({ error: 'Thiếu tên đăng nhập' });
-      const sh = ensureAdminSheet(masterSs);
-      const vals = sh.getDataRange().getValues();
-      const headers = vals[0].map(String);
-      const userCol = headers.indexOf('username');
-      for (let r = 1; r < vals.length; r++) {
-        if (String(vals[r][userCol]).trim() === username) {
-          if (body.password && String(body.password).length >= 4) {
-            sh.getRange(r + 1, headers.indexOf('password') + 1).setValue(String(body.password));
-          }
-          if (body.role !== undefined) {
-            const nextRole = String(body.role).trim();
-            sh.getRange(r + 1, headers.indexOf('role') + 1).setValue(nextRole);
-            if (nextRole === 'superadmin') {
-              sh.getRange(r + 1, headers.indexOf('storeId') + 1).setValue('*');
+      const adminSheets = [ensureAdminSheet(masterSs)];
+      const masterId = masterSs.getId();
+      getStoresList(masterSs).forEach(st => {
+        if (!st.spreadsheetId || st.spreadsheetId === masterId) return;
+        try {
+          const stSh = SpreadsheetApp.openById(st.spreadsheetId).getSheetByName('Admins');
+          if (stSh && stSh.getLastRow() >= 2) adminSheets.push(stSh);
+        } catch (_err) {}
+      });
+
+      for (let i = 0; i < adminSheets.length; i++) {
+        const sh = adminSheets[i];
+        const vals = sh.getDataRange().getValues();
+        const headers = vals[0].map(String);
+        const userCol = headers.indexOf('username');
+        for (let r = 1; r < vals.length; r++) {
+          if (String(vals[r][userCol]).trim() === username) {
+            if (body.password && String(body.password).length >= 4 && headers.indexOf('password') !== -1) {
+              sh.getRange(r + 1, headers.indexOf('password') + 1).setValue(String(body.password));
             }
+            if (body.role !== undefined && headers.indexOf('role') !== -1) {
+              const nextRole = String(body.role).trim();
+              sh.getRange(r + 1, headers.indexOf('role') + 1).setValue(nextRole);
+              if (nextRole === 'superadmin' && headers.indexOf('storeId') !== -1) {
+                sh.getRange(r + 1, headers.indexOf('storeId') + 1).setValue('*');
+              }
+            }
+            if (body.storeId !== undefined && body.role !== 'superadmin' && headers.indexOf('storeId') !== -1) {
+              sh.getRange(r + 1, headers.indexOf('storeId') + 1).setValue(String(body.storeId).trim());
+            }
+            if (body.active !== undefined && headers.indexOf('active') !== -1) {
+              sh.getRange(r + 1, headers.indexOf('active') + 1).setValue(Boolean(body.active));
+            }
+            return jsonOut({ ok: true });
           }
-          if (body.storeId !== undefined && body.role !== 'superadmin') {
-            sh.getRange(r + 1, headers.indexOf('storeId') + 1).setValue(String(body.storeId).trim());
-          }
-          if (body.active !== undefined) {
-            sh.getRange(r + 1, headers.indexOf('active') + 1).setValue(Boolean(body.active));
-          }
-          return jsonOut({ ok: true });
         }
       }
       return jsonOut({ error: 'Không tìm thấy tài khoản' });
@@ -1287,15 +1475,27 @@ function doPost(e) {
       if (!username || !currentPassword || newPassword.length < 4) {
         return jsonOut({ error: 'Mật khẩu mới phải có ít nhất 4 ký tự' });
       }
-      const sh = ensureAdminSheet(masterSs);
-      const vals = sh.getDataRange().getValues();
-      const headers = vals[0].map(String);
-      const userCol = headers.indexOf('username');
-      const passCol = headers.indexOf('password');
-      for (let r = 1; r < vals.length; r++) {
-        if (String(vals[r][userCol]).trim() === username && String(vals[r][passCol]) === currentPassword) {
-          sh.getRange(r + 1, passCol + 1).setValue(newPassword);
-          return jsonOut({ ok: true });
+      const adminSheets = [ensureAdminSheet(masterSs)];
+      const masterId = masterSs.getId();
+      getStoresList(masterSs).forEach(st => {
+        if (!st.spreadsheetId || st.spreadsheetId === masterId) return;
+        try {
+          const stSh = SpreadsheetApp.openById(st.spreadsheetId).getSheetByName('Admins');
+          if (stSh && stSh.getLastRow() >= 2) adminSheets.push(stSh);
+        } catch (_err) {}
+      });
+
+      for (let i = 0; i < adminSheets.length; i++) {
+        const sh = adminSheets[i];
+        const vals = sh.getDataRange().getValues();
+        const headers = vals[0].map(String);
+        const userCol = headers.indexOf('username');
+        const passCol = headers.indexOf('password');
+        for (let r = 1; r < vals.length; r++) {
+          if (String(vals[r][userCol]).trim() === username && String(vals[r][passCol]) === currentPassword) {
+            sh.getRange(r + 1, passCol + 1).setValue(newPassword);
+            return jsonOut({ ok: true });
+          }
         }
       }
       return jsonOut({ error: 'Mật khẩu hiện tại không đúng' });

@@ -182,7 +182,7 @@ onMounted(loadRevenue);
               <th>Nhân viên</th>
               <th>Số đơn</th>
               <th>Doanh thu</th>
-              <th>Tiền mặt thực / dự kiến</th>
+              <th>Tiền chốt két</th>
               <th>Trạng thái</th>
             </tr>
           </thead>

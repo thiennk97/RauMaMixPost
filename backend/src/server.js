@@ -377,6 +377,31 @@ app.patch('/api/stores/:id', requireSuperAdmin, async (req, res) => {
   }
 });
 
+app.delete('/api/stores/:id', requireSuperAdmin, async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (id === 'default') {
+      return res.status(400).json({ error: 'Không thể xóa quán mặc định' });
+    }
+    if (GAS_URL) {
+      return res.json(await gasPost({ action: 'deleteStore', id }));
+    }
+    const db = readDb();
+    const before = (db.stores || []).length;
+    db.stores = (db.stores || []).filter((s) => s.id !== id);
+    if (db.stores.length === before) {
+      return res.status(404).json({ error: 'Không tìm thấy quán' });
+    }
+    db.admins = (db.admins || []).filter((u) => u.storeId !== id);
+    db.orders = (db.orders || []).filter((o) => o.storeId !== id);
+    db.shifts = (db.shifts || []).filter((s) => s.storeId !== id);
+    writeDb(db);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 app.get('/api/users', requireSuperAdmin, async (_req, res) => {
   try {
     if (GAS_URL) {

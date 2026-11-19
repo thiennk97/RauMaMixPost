@@ -132,6 +132,7 @@ export const api = {
   getStores: () => requestApi('/stores'),
   createStore: (payload) => requestApi('/stores', { method: 'POST', body: JSON.stringify(payload) }),
   updateStore: (id, payload) => requestApi(`/stores/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteStore: (id) => requestApi(`/stores/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   getUsers: () => requestApi('/users'),
   createUser: (payload) => requestApi('/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUser: (username, payload) =>

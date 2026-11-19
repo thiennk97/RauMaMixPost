@@ -185,6 +185,22 @@ async function toggleStoreActive(st) {
   }
 }
 
+async function handleDeleteStore(st) {
+  if (st.id === 'default') return;
+  if (!confirm(`Xác nhận xóa quán "${st.name}"?\n\nLưu ý: File Google Sheet của quán và các tài khoản liên quan sẽ bị xóa!`)) {
+    return;
+  }
+  try {
+    await api.deleteStore(st.id);
+    if (selectedStoreId.value === st.id) {
+      selectedStoreId.value = 'all';
+    }
+    await loadManageData();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
 async function handleCreateUser() {
   userError.value = '';
   const { username, password, role, storeId } = newUserForm.value;
@@ -629,9 +645,14 @@ onMounted(() => {
                 <div style="font-weight: 600">{{ st.name }} <span style="font-size: 12px; color: var(--text-muted)">({{ st.id }})</span></div>
                 <div style="font-size: 11px; color: var(--text-muted); word-break: break-all">Sheet: {{ st.spreadsheetId || 'local' }}</div>
               </div>
-              <button class="btn btn-sm" :class="st.active ? 'btn-primary' : 'btn-outline'" @click="toggleStoreActive(st)">
-                {{ st.active ? 'Đang mở' : 'Tạm ngưng' }}
-              </button>
+              <div style="display: flex; gap: 6px; flex-shrink: 0">
+                <button class="btn btn-sm" :class="st.active ? 'btn-primary' : 'btn-outline'" @click="toggleStoreActive(st)">
+                  {{ st.active ? 'Đang mở' : 'Tạm ngưng' }}
+                </button>
+                <button v-if="st.id !== 'default'" class="btn btn-danger-soft btn-sm" @click="handleDeleteStore(st)">
+                  Xóa
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -924,7 +945,7 @@ onMounted(() => {
                 <th>Nhân viên</th>
                 <th>Số đơn</th>
                 <th>Doanh thu</th>
-                <th>Tiền mặt thực / dự kiến</th>
+                <th>Tiền chốt két</th>
                 <th>Trạng thái</th>
               </tr>
             </thead>
