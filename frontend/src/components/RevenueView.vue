@@ -328,5 +328,8 @@ onMounted(loadRevenue);
         </table>
       </div>
     </div>
+
+    <!-- Khoảng đệm bottom giúp vuốt cuộn xem hết báo cáo & đơn hàng trên máy POS -->
+    <div style="height: 120px; flex-shrink: 0;" aria-hidden="true"></div>
   </div>
 </template>

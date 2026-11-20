@@ -349,6 +349,9 @@ function submitOrder(shouldPrint = true) {
           </div>
         </div>
       </div>
+
+      <!-- Khoảng đệm bottom giúp vuốt cuộn xem hết món trên máy POS -->
+      <div style="height: 100px; flex-shrink: 0;" aria-hidden="true"></div>
     </section>
 
     <!-- Cart Panel -->

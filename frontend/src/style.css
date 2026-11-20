@@ -52,6 +52,7 @@ button {
 
 /* Top Navbar */
 .topbar {
+  flex-shrink: 0;
   min-height: 50px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -163,7 +164,7 @@ button {
 
   .pos-layout {
     flex: 1;
-    height: 100%;
+    height: auto;
     min-height: 0;
     min-width: 0;
     overflow: hidden;
@@ -177,6 +178,10 @@ button {
     overflow-y: auto;
     overflow-x: hidden;
     padding-top: 0 !important;
+    padding-bottom: 110px !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
   }
 
   .channel-bar {
@@ -296,7 +301,7 @@ button {
   }
 
   .page-container {
-    padding: 12px;
+    padding: 12px 12px 140px;
   }
 
   .kpi-grid {
@@ -342,13 +347,15 @@ button {
 }
 
 .menu-panel {
-  padding: 12px 14px;
+  padding: 12px 14px 110px;
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
   max-width: 100%;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .channel-bar {
@@ -568,10 +575,12 @@ button {
 .cart-items {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 10px;
+  padding: 8px 10px 40px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .cart-empty {
@@ -995,13 +1004,16 @@ button {
   max-width: 1280px;
   width: 100%;
   margin: 0 auto;
-  padding: 18px;
+  padding: 16px 16px 150px;
   display: flex;
   flex-direction: column;
   gap: 16px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
 }
 
 .kpi-grid {
@@ -1053,6 +1065,8 @@ button {
 
 .table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
 }
 
 table {
