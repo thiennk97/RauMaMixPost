@@ -151,7 +151,37 @@ export const api = {
   getUsers: () => requestApi('/users'),
   createUser: (payload) => requestApi('/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateUser: (username, payload) =>
-    requestApi(`/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: JSON.stringify(payload) })
+    requestApi(`/users/${encodeURIComponent(username)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  getEmployees: ({ storeId = '', includeInactive = false } = {}) => {
+    const params = new URLSearchParams();
+    if (storeId) params.set('storeId', storeId);
+    if (includeInactive) params.set('includeInactive', '1');
+    const q = params.toString();
+    return requestApi(`/employees${q ? `?${q}` : ''}`);
+  },
+  createEmployee: (payload) =>
+    requestApi('/employees', { method: 'POST', body: JSON.stringify(payload) }),
+  updateEmployee: (id, payload) =>
+    requestApi(`/employees/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteEmployee: (id, storeId = '') => {
+    const q = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
+    return requestApi(`/employees/${encodeURIComponent(id)}${q}`, { method: 'DELETE' });
+  },
+  getTimeLogs: ({ month = '', storeId = '', employeeId = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (month) params.set('month', month);
+    if (storeId) params.set('storeId', storeId);
+    if (employeeId) params.set('employeeId', employeeId);
+    return requestApi(`/timelogs?${params.toString()}`);
+  },
+  createTimeLog: (payload) =>
+    requestApi('/timelogs', { method: 'POST', body: JSON.stringify(payload) }),
+  updateTimeLog: (id, payload) =>
+    requestApi(`/timelogs/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteTimeLog: (id, storeId = '') => {
+    const q = storeId ? `?storeId=${encodeURIComponent(storeId)}` : '';
+    return requestApi(`/timelogs/${encodeURIComponent(id)}${q}`, { method: 'DELETE' });
+  }
 };
 
 export function formatVnd(amount) {

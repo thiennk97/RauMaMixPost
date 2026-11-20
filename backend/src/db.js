@@ -27,6 +27,7 @@ const DEFAULT_STORES = [
 
 const DEFAULT_ADMINS = [
   { username: 'admin', password: '0912Thien', role: 'superadmin', storeId: '*', active: true },
+  { username: 'nguyenchanh', password: '123456', role: 'admin', storeId: 'default', active: true },
   { username: 'member', password: '1234JQK@#$', role: 'staff', storeId: 'default', active: true }
 ];
 
@@ -102,6 +103,12 @@ function normalizeDb(db) {
   }
   if (!Array.isArray(db.shifts)) {
     db.shifts = [];
+  }
+  if (!Array.isArray(db.employees)) {
+    db.employees = [];
+  }
+  if (!Array.isArray(db.timeLogs)) {
+    db.timeLogs = [];
   }
   if (!Array.isArray(db.stores) || !db.stores.length) {
     db.stores = DEFAULT_STORES.map((s) => ({ ...s }));

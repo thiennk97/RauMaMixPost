@@ -1115,6 +1115,48 @@ function getUsersList(masterSs) {
   return result;
 }
 
+function getEmployeesList(ss) {
+  const sh = getOrCreateSheet(ss, 'Employees', ['id', 'name', 'active', 'createdAt']);
+  return readSheetObjects(sh).map(r => ({
+    id: String(r.id || ''),
+    name: String(r.name || ''),
+    active: r.active !== false && String(r.active).toLowerCase() !== 'false',
+    createdAt: String(r.createdAt || '')
+  })).filter(e => e.id && e.name);
+}
+
+function formatTimeKey(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return String(val.getHours()).padStart(2, '0') + ':' + String(val.getMinutes()).padStart(2, '0');
+  }
+  const s = String(val).trim();
+  const m = s.match(/\b(\d{1,2}):(\d{2})(?::\d{2})?\b/);
+  if (m) return m[1].padStart(2, '0') + ':' + m[2];
+  return s;
+}
+
+function getTimeLogsList(ss, month, employeeId) {
+  const sh = getOrCreateSheet(ss, 'TimeLogs', ['id', 'employeeId', 'employeeName', 'dateKey', 'startTime', 'endTime', 'hours', 'note', 'createdAt', 'createdBy']);
+  return readSheetObjects(sh).map(r => ({
+    id: String(r.id || ''),
+    employeeId: String(r.employeeId || ''),
+    employeeName: String(r.employeeName || ''),
+    dateKey: formatDateKey(r.dateKey),
+    startTime: formatTimeKey(r.startTime),
+    endTime: formatTimeKey(r.endTime),
+    hours: Number(r.hours) || 0,
+    note: String(r.note || ''),
+    createdAt: String(r.createdAt || ''),
+    createdBy: String(r.createdBy || '')
+  })).filter(l => {
+    if (!l.id) return false;
+    if (month && String(l.dateKey || '').indexOf(month) !== 0) return false;
+    if (employeeId && l.employeeId !== employeeId) return false;
+    return true;
+  }).sort((a, b) => String(b.dateKey).localeCompare(String(a.dateKey)) || String(b.startTime).localeCompare(String(a.startTime)));
+}
+
 function doGet(e) {
   const params = (e && e.parameter) || {};
   if (!verifyApiSecret(params.secret)) {
@@ -1135,6 +1177,13 @@ function doGet(e) {
   if (action === 'revenue') {
     const today = Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
     return jsonOut(getRevenuePayload(ss, params.from || today, params.to || today, params.shiftId || ''));
+  }
+  if (action === 'employees') {
+    return jsonOut({ employees: getEmployeesList(ss) });
+  }
+  if (action === 'timelogs') {
+    const month = params.month || Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM');
+    return jsonOut({ logs: getTimeLogsList(ss, month, params.employeeId || '') });
   }
   return jsonOut({ ok: true });
 }
@@ -1738,6 +1787,158 @@ function doPost(e) {
       for (let r = 1; r < vals.length; r++) {
         if (String(vals[r][0]) === String(body.id)) {
           cSh.deleteRow(r + 1);
+          return jsonOut({ ok: true });
+        }
+      }
+      return jsonOut({ ok: true });
+    }
+
+    if (action === 'createEmployee') {
+      const empSh = getOrCreateSheet(ss, 'Employees', ['id', 'name', 'active', 'createdAt']);
+      const name = String(body.name || '').trim();
+      if (!name) return jsonOut({ error: 'Vui lòng nhập tên nhân viên' });
+      const existing = getEmployeesList(ss).find(e => e.name.toLowerCase() === name.toLowerCase() && e.active !== false);
+      if (existing) return jsonOut({ error: 'Nhân viên "' + name + '" đã tồn tại' });
+      const emp = {
+        id: 'EMP-' + Utilities.getUuid().slice(0, 6).toUpperCase(),
+        name: name,
+        active: true,
+        createdAt: new Date().toISOString()
+      };
+      empSh.appendRow([emp.id, emp.name, true, emp.createdAt]);
+      return jsonOut(emp);
+    }
+
+    if (action === 'updateEmployee') {
+      const empSh = getOrCreateSheet(ss, 'Employees', ['id', 'name', 'active', 'createdAt']);
+      const vals = empSh.getDataRange().getValues();
+      for (let r = 1; r < vals.length; r++) {
+        if (String(vals[r][0]) === String(body.id)) {
+          if (body.name !== undefined) empSh.getRange(r + 1, 2).setValue(String(body.name).trim());
+          if (body.active !== undefined) empSh.getRange(r + 1, 3).setValue(Boolean(body.active));
+          return jsonOut({
+            id: String(vals[r][0]),
+            name: body.name !== undefined ? String(body.name).trim() : String(vals[r][1]),
+            active: body.active !== undefined ? Boolean(body.active) : vals[r][2] !== false,
+            createdAt: String(vals[r][3] || '')
+          });
+        }
+      }
+      return jsonOut({ error: 'Không tìm thấy nhân viên' });
+    }
+
+    if (action === 'deleteEmployee') {
+      const empSh = getOrCreateSheet(ss, 'Employees', ['id', 'name', 'active', 'createdAt']);
+      const vals = empSh.getDataRange().getValues();
+      for (let r = 1; r < vals.length; r++) {
+        if (String(vals[r][0]) === String(body.id)) {
+          empSh.deleteRow(r + 1);
+          return jsonOut({ ok: true });
+        }
+      }
+      return jsonOut({ ok: true });
+    }
+
+    if (action === 'createTimeLog') {
+      const emps = getEmployeesList(ss);
+      const emp = emps.find(e => e.id === String(body.employeeId || '') && e.active !== false);
+      if (!emp) return jsonOut({ error: 'Nhân viên không tồn tại hoặc đã ngưng hoạt động' });
+      const dateKey = String(body.dateKey || '');
+      const today = Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
+      if (dateKey > today) {
+        return jsonOut({ error: 'Không được chấm công cho ngày tương lai' });
+      }
+      const startTime = String(body.startTime || '');
+      const endTime = String(body.endTime || '');
+      const sm = startTime.match(/^(\d{1,2}):(\d{2})$/);
+      const em = endTime.match(/^(\d{1,2}):(\d{2})$/);
+      const startMin = sm ? Number(sm[1]) * 60 + Number(sm[2]) : -1;
+      const endMin = em ? Number(em[1]) * 60 + Number(em[2]) : -1;
+      if (startMin < 480 || endMin > 1380) {
+        return jsonOut({ error: 'Giờ chấm công phải nằm trong khung mở cửa 08:00 - 23:00' });
+      }
+      if (endMin <= startMin) {
+        return jsonOut({ error: 'Giờ về phải sau giờ bắt đầu' });
+      }
+      const hours = Math.round(((endMin - startMin) / 60) * 100) / 100;
+      const existingDayHours = getTimeLogsList(ss, dateKey.slice(0, 7), emp.id)
+        .filter(l => l.dateKey === dateKey)
+        .reduce((sum, l) => sum + (Number(l.hours) || 0), 0);
+      if (Math.round((existingDayHours + hours) * 100) / 100 > 15) {
+        return jsonOut({ error: 'Tổng giờ làm của ' + emp.name + ' ngày ' + dateKey + ' vượt quá 15 giờ (08:00 - 23:00)' });
+      }
+      const tlSh = getOrCreateSheet(ss, 'TimeLogs', ['id', 'employeeId', 'employeeName', 'dateKey', 'startTime', 'endTime', 'hours', 'note', 'createdAt', 'createdBy']);
+      const log = {
+        id: 'TL-' + Utilities.getUuid().slice(0, 8).toUpperCase(),
+        employeeId: emp.id,
+        employeeName: emp.name,
+        dateKey: dateKey,
+        startTime: startTime,
+        endTime: endTime,
+        hours: hours,
+        note: String(body.note || ''),
+        createdAt: new Date().toISOString(),
+        createdBy: String(body.createdBy || '')
+      };
+      tlSh.appendRow([log.id, log.employeeId, log.employeeName, "'" + log.dateKey, "'" + log.startTime, "'" + log.endTime, log.hours, log.note, log.createdAt, log.createdBy]);
+      return jsonOut(log);
+    }
+
+    if (action === 'updateTimeLog') {
+      const emps = getEmployeesList(ss);
+      const emp = emps.find(e => e.id === String(body.employeeId || ''));
+      if (!emp) return jsonOut({ error: 'Nhân viên không tồn tại' });
+      const id = String(body.id || '');
+      const dateKey = String(body.dateKey || '');
+      const today = Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
+      if (dateKey > today) return jsonOut({ error: 'Không được chấm công cho ngày tương lai' });
+      const startTime = String(body.startTime || '');
+      const endTime = String(body.endTime || '');
+      const sm = startTime.match(/^(\d{1,2}):(\d{2})$/);
+      const em = endTime.match(/^(\d{1,2}):(\d{2})$/);
+      const startMin = sm ? Number(sm[1]) * 60 + Number(sm[2]) : -1;
+      const endMin = em ? Number(em[1]) * 60 + Number(em[2]) : -1;
+      if (startMin < 480 || endMin > 1380) {
+        return jsonOut({ error: 'Giờ chấm công phải nằm trong khung mở cửa 08:00 - 23:00' });
+      }
+      if (endMin <= startMin) {
+        return jsonOut({ error: 'Giờ về phải sau giờ bắt đầu' });
+      }
+      const hours = Math.round(((endMin - startMin) / 60) * 100) / 100;
+      const existingDayHours = getTimeLogsList(ss, dateKey.slice(0, 7), emp.id)
+        .filter(l => l.id !== id && l.dateKey === dateKey)
+        .reduce((sum, l) => sum + (Number(l.hours) || 0), 0);
+      if (Math.round((existingDayHours + hours) * 100) / 100 > 15) {
+        return jsonOut({ error: 'Tổng giờ làm của ' + emp.name + ' ngày ' + dateKey + ' vượt quá 15 giờ (08:00 - 23:00)' });
+      }
+      const tlSh = getOrCreateSheet(ss, 'TimeLogs', ['id', 'employeeId', 'employeeName', 'dateKey', 'startTime', 'endTime', 'hours', 'note', 'createdAt', 'createdBy']);
+      const vals = tlSh.getDataRange().getValues();
+      for (let r = 1; r < vals.length; r++) {
+        if (String(vals[r][0]) === id) {
+          tlSh.getRange(r + 1, 2, 1, 7).setValues([[emp.id, emp.name, "'" + dateKey, "'" + startTime, "'" + endTime, hours, String(body.note || '')]]);
+          return jsonOut({
+            id: id,
+            employeeId: emp.id,
+            employeeName: emp.name,
+            dateKey: dateKey,
+            startTime: startTime,
+            endTime: endTime,
+            hours: hours,
+            note: String(body.note || ''),
+            createdAt: String(vals[r][8] || ''),
+            createdBy: String(vals[r][9] || '')
+          });
+        }
+      }
+      return jsonOut({ error: 'Không tìm thấy bản ghi chấm công' });
+    }
+
+    if (action === 'deleteTimeLog') {
+      const tlSh = getOrCreateSheet(ss, 'TimeLogs', ['id', 'employeeId', 'employeeName', 'dateKey', 'startTime', 'endTime', 'hours', 'note', 'createdAt', 'createdBy']);
+      const vals = tlSh.getDataRange().getValues();
+      for (let r = 1; r < vals.length; r++) {
+        if (String(vals[r][0]) === String(body.id)) {
+          tlSh.deleteRow(r + 1);
           return jsonOut({ ok: true });
         }
       }

@@ -1167,6 +1167,400 @@ app.get('/api/revenue', requireAuth, async (req, res) => {
   }
 });
 
+// --- EMPLOYEES & TIMEKEEPING (CHẤM CÔNG) ---
+function parseTimeMinutes(hhmm) {
+  const m = String(hhmm || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return -1;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return -1;
+  return h * 60 + min;
+}
+
+function formatHHMM(hhmm) {
+  const m = String(hhmm || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return '';
+  return `${m[1].padStart(2, '0')}:${m[2]}`;
+}
+
+function summarizeTimeLogs(logs) {
+  const map = new Map();
+  for (const log of logs) {
+    const key = log.employeeId || log.employeeName;
+    if (!map.has(key)) {
+      map.set(key, {
+        employeeId: log.employeeId,
+        employeeName: log.employeeName,
+        storeId: log.storeId || 'default',
+        storeName: log.storeName || '',
+        totalShifts: 0,
+        totalHours: 0,
+        byDate: {}
+      });
+    }
+    const entry = map.get(key);
+    const hrs = Number(log.hours) || 0;
+    entry.totalShifts += 1;
+    entry.totalHours = Math.round((entry.totalHours + hrs) * 100) / 100;
+    if (!entry.byDate[log.dateKey]) {
+      entry.byDate[log.dateKey] = { dateKey: log.dateKey, hours: 0, shifts: 0 };
+    }
+    entry.byDate[log.dateKey].hours = Math.round((entry.byDate[log.dateKey].hours + hrs) * 100) / 100;
+    entry.byDate[log.dateKey].shifts += 1;
+  }
+  return Array.from(map.values()).sort((a, b) => b.totalHours - a.totalHours || a.employeeName.localeCompare(b.employeeName));
+}
+
+app.get('/api/employees', requireAuth, async (req, res) => {
+  try {
+    const requestedStoreId = String(req.query.storeId || '').trim();
+    const includeInactive = req.query.includeInactive === '1' && (req.user.role === 'admin' || req.user.role === 'superadmin');
+    const isAllStores = req.user.role === 'superadmin' && requestedStoreId === 'all';
+
+    if (GAS_URL) {
+      if (isAllStores) {
+        const stores = (await fetchAllStores()).filter((s) => s.active !== false);
+        const results = await Promise.all(
+          stores.map(async (st) => {
+            const data = await gasGet({ action: 'employees', spreadsheetId: st.spreadsheetId });
+            return (data.employees || []).map((e) => ({ ...e, storeId: st.id, storeName: st.name }));
+          })
+        );
+        const all = results.flat().filter((e) => includeInactive || e.active !== false);
+        return res.json({ employees: all });
+      }
+      const store = await resolveTargetStore(req);
+      const data = await gasGet({ action: 'employees', spreadsheetId: store.spreadsheetId });
+      const employees = (data.employees || [])
+        .map((e) => ({ ...e, storeId: store.storeId, storeName: store.storeName }))
+        .filter((e) => includeInactive || e.active !== false);
+      return res.json({ employees });
+    }
+
+    const db = readDb();
+    const store = await resolveTargetStore(req);
+    const employees = (db.employees || [])
+      .filter((e) => (isAllStores || (e.storeId || 'default') === store.storeId) && (includeInactive || e.active !== false))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ employees });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post('/api/employees', requireAdmin, async (req, res) => {
+  try {
+    const store = await resolveTargetStore(req);
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Vui lòng nhập tên nhân viên' });
+
+    if (GAS_URL) {
+      const data = await gasPost({ action: 'createEmployee', spreadsheetId: store.spreadsheetId, name });
+      return res.status(201).json({ ...data, storeId: store.storeId, storeName: store.storeName });
+    }
+
+    const db = readDb();
+    const dup = (db.employees || []).find(
+      (e) => (e.storeId || 'default') === store.storeId && e.name.toLowerCase() === name.toLowerCase() && e.active !== false
+    );
+    if (dup) {
+      return res.status(400).json({ error: `Nhân viên "${name}" đã tồn tại trong quán này` });
+    }
+    const employee = {
+      id: `EMP-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
+      name,
+      storeId: store.storeId,
+      storeName: store.storeName,
+      active: true,
+      createdAt: new Date().toISOString()
+    };
+    db.employees.push(employee);
+    writeDb(db);
+    res.status(201).json(employee);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.patch('/api/employees/:id', requireAdmin, async (req, res) => {
+  try {
+    const store = await resolveTargetStore(req);
+    const id = req.params.id;
+    const name = req.body?.name !== undefined ? String(req.body.name).trim() : undefined;
+    const active = req.body?.active !== undefined ? Boolean(req.body.active) : undefined;
+
+    if (GAS_URL) {
+      const data = await gasPost({
+        action: 'updateEmployee',
+        spreadsheetId: store.spreadsheetId,
+        id,
+        ...(name !== undefined ? { name } : {}),
+        ...(active !== undefined ? { active } : {})
+      });
+      return res.json({ ...data, storeId: store.storeId, storeName: store.storeName });
+    }
+
+    const db = readDb();
+    const emp = (db.employees || []).find((e) => e.id === id && (e.storeId || 'default') === store.storeId);
+    if (!emp) return res.status(404).json({ error: 'Không tìm thấy nhân viên' });
+    if (name !== undefined) {
+      if (!name) return res.status(400).json({ error: 'Tên nhân viên không được để trống' });
+      emp.name = name;
+    }
+    if (active !== undefined) emp.active = active;
+    writeDb(db);
+    res.json(emp);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.delete('/api/employees/:id', requireAdmin, async (req, res) => {
+  try {
+    const store = await resolveTargetStore(req);
+    const id = req.params.id;
+    if (GAS_URL) {
+      return res.json(await gasPost({ action: 'deleteEmployee', spreadsheetId: store.spreadsheetId, id }));
+    }
+    const db = readDb();
+    db.employees = (db.employees || []).filter((e) => !(e.id === id && (e.storeId || 'default') === store.storeId));
+    writeDb(db);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+function getVnPrevMonthStr() {
+  const today = getVnTodayStr();
+  const [y, m] = today.slice(0, 7).split('-').map(Number);
+  if (m === 1) return `${y - 1}-12`;
+  return `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
+app.get('/api/timelogs', requireAuth, async (req, res) => {
+  try {
+    const currentMonth = getVnTodayStr().slice(0, 7);
+    const prevMonth = getVnPrevMonthStr();
+    const month = String(req.query.month || currentMonth).trim();
+    if (req.user.role === 'staff' && month !== currentMonth && month !== prevMonth) {
+      return res.status(403).json({ error: 'Nhân viên chỉ được xem chấm công tháng này và tháng trước' });
+    }
+    const employeeId = String(req.query.employeeId || '').trim();
+    const requestedStoreId = String(req.query.storeId || '').trim();
+    const isAllStores = req.user.role === 'superadmin' && requestedStoreId === 'all';
+
+    if (GAS_URL) {
+      if (isAllStores) {
+        const stores = (await fetchAllStores()).filter((s) => s.active !== false);
+        const results = await Promise.all(
+          stores.map(async (st) => {
+            const data = await gasGet({ action: 'timelogs', month, employeeId, spreadsheetId: st.spreadsheetId });
+            return (data.logs || []).map((l) => ({ ...l, storeId: st.id, storeName: st.name }));
+          })
+        );
+        const logs = results.flat().sort((a, b) => b.dateKey.localeCompare(a.dateKey) || b.startTime.localeCompare(a.startTime));
+        return res.json({ month, logs, summary: summarizeTimeLogs(logs) });
+      }
+      const store = await resolveTargetStore(req);
+      const data = await gasGet({ action: 'timelogs', month, employeeId, spreadsheetId: store.spreadsheetId });
+      const logs = (data.logs || []).map((l) => ({ ...l, storeId: store.storeId, storeName: store.storeName }));
+      return res.json({ month, logs, summary: summarizeTimeLogs(logs) });
+    }
+
+    const db = readDb();
+    const store = await resolveTargetStore(req);
+    const logs = (db.timeLogs || [])
+      .filter((l) => {
+        if (!isAllStores && (l.storeId || 'default') !== store.storeId) return false;
+        if (month && !String(l.dateKey || '').startsWith(month)) return false;
+        if (employeeId && l.employeeId !== employeeId) return false;
+        return true;
+      })
+      .sort((a, b) => String(b.dateKey).localeCompare(String(a.dateKey)) || String(b.startTime).localeCompare(String(a.startTime)));
+
+    res.json({
+      month,
+      logs,
+      summary: summarizeTimeLogs(logs)
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+const OPEN_TIME_MIN = 8 * 60;  // 08:00
+const CLOSE_TIME_MIN = 23 * 60; // 23:00
+const MAX_DAILY_HOURS = (CLOSE_TIME_MIN - OPEN_TIME_MIN) / 60; // 15 giờ
+
+app.post('/api/timelogs', requireAuth, async (req, res) => {
+  try {
+    const store = await resolveTargetStore(req);
+    const employeeId = String(req.body?.employeeId || '').trim();
+    const dateKey = String(req.body?.dateKey || getVnTodayStr()).trim();
+    const startTime = formatHHMM(req.body?.startTime);
+    const endTime = formatHHMM(req.body?.endTime);
+    const note = String(req.body?.note || '').trim();
+
+    if (!employeeId) return res.status(400).json({ error: 'Vui lòng chọn nhân viên từ danh sách' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return res.status(400).json({ error: 'Ngày chấm công không hợp lệ' });
+    if (dateKey > getVnTodayStr()) return res.status(400).json({ error: 'Không được chấm công cho ngày tương lai' });
+    const startMin = parseTimeMinutes(startTime);
+    const endMin = parseTimeMinutes(endTime);
+    if (startMin < 0 || endMin < 0) return res.status(400).json({ error: 'Vui lòng nhập giờ bắt đầu và giờ về hợp lệ' });
+    if (startMin < OPEN_TIME_MIN || endMin > CLOSE_TIME_MIN) {
+      return res.status(400).json({ error: 'Giờ chấm công phải nằm trong khung mở cửa 08:00 - 23:00' });
+    }
+    if (endMin <= startMin) return res.status(400).json({ error: 'Giờ về phải sau giờ bắt đầu' });
+
+    const hours = Math.round(((endMin - startMin) / 60) * 100) / 100;
+    if (hours > MAX_DAILY_HOURS) {
+      return res.status(400).json({ error: `Tổng giờ làm không được vượt quá ${MAX_DAILY_HOURS} giờ/ngày` });
+    }
+
+    if (GAS_URL) {
+      const log = await gasPost({
+        action: 'createTimeLog',
+        spreadsheetId: store.spreadsheetId,
+        employeeId,
+        dateKey,
+        startTime,
+        endTime,
+        hours,
+        note,
+        createdBy: req.user.username
+      });
+      return res.status(201).json({ ...log, storeId: store.storeId, storeName: store.storeName });
+    }
+
+    const db = readDb();
+    const emp = (db.employees || []).find(
+      (e) => e.id === employeeId && (e.storeId || 'default') === store.storeId && e.active !== false
+    );
+    if (!emp) {
+      return res.status(400).json({ error: 'Nhân viên không tồn tại hoặc đã ngưng hoạt động' });
+    }
+
+    const existingDayHours = (db.timeLogs || [])
+      .filter((l) => (l.storeId || 'default') === store.storeId && l.employeeId === employeeId && l.dateKey === dateKey)
+      .reduce((sum, l) => sum + (Number(l.hours) || 0), 0);
+    if (Math.round((existingDayHours + hours) * 100) / 100 > MAX_DAILY_HOURS) {
+      return res.status(400).json({
+        error: `Tổng giờ làm của ${emp.name} ngày ${dateKey} sẽ vượt quá ${MAX_DAILY_HOURS} giờ (đã chấm ${Math.round(existingDayHours * 100) / 100} giờ)`
+      });
+    }
+
+    const log = {
+      id: `TL-${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
+      storeId: store.storeId,
+      storeName: store.storeName,
+      employeeId: emp.id,
+      employeeName: emp.name,
+      dateKey,
+      startTime,
+      endTime,
+      hours,
+      note,
+      createdAt: new Date().toISOString(),
+      createdBy: req.user.username
+    };
+    db.timeLogs.push(log);
+    writeDb(db);
+    res.status(201).json(log);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.patch('/api/timelogs/:id', requireAdmin, async (req, res) => {
+  try {
+    const store = await resolveTargetStore(req);
+    const id = req.params.id;
+    const employeeId = String(req.body?.employeeId || '').trim();
+    const dateKey = String(req.body?.dateKey || '').trim();
+    const startTime = formatHHMM(req.body?.startTime);
+    const endTime = formatHHMM(req.body?.endTime);
+    const note = req.body?.note !== undefined ? String(req.body.note).trim() : '';
+
+    if (!employeeId) return res.status(400).json({ error: 'Vui lòng chọn nhân viên từ danh sách' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return res.status(400).json({ error: 'Ngày chấm công không hợp lệ' });
+    if (dateKey > getVnTodayStr()) return res.status(400).json({ error: 'Không được chấm công cho ngày tương lai' });
+    const startMin = parseTimeMinutes(startTime);
+    const endMin = parseTimeMinutes(endTime);
+    if (startMin < 0 || endMin < 0) return res.status(400).json({ error: 'Vui lòng nhập giờ bắt đầu và giờ về hợp lệ' });
+    if (startMin < OPEN_TIME_MIN || endMin > CLOSE_TIME_MIN) {
+      return res.status(400).json({ error: 'Giờ chấm công phải nằm trong khung mở cửa 08:00 - 23:00' });
+    }
+    if (endMin <= startMin) return res.status(400).json({ error: 'Giờ về phải sau giờ bắt đầu' });
+
+    const hours = Math.round(((endMin - startMin) / 60) * 100) / 100;
+
+    if (GAS_URL) {
+      const log = await gasPost({
+        action: 'updateTimeLog',
+        spreadsheetId: store.spreadsheetId,
+        id,
+        employeeId,
+        dateKey,
+        startTime,
+        endTime,
+        hours,
+        note
+      });
+      return res.json({ ...log, storeId: store.storeId, storeName: store.storeName });
+    }
+
+    const db = readDb();
+    const idx = (db.timeLogs || []).findIndex((l) => l.id === id && (l.storeId || 'default') === store.storeId);
+    if (idx === -1) return res.status(404).json({ error: 'Không tìm thấy bản ghi chấm công' });
+
+    const emp = (db.employees || []).find((e) => e.id === employeeId && (e.storeId || 'default') === store.storeId);
+    if (!emp) return res.status(400).json({ error: 'Nhân viên không tồn tại' });
+
+    const existingDayHours = (db.timeLogs || [])
+      .filter((l) => l.id !== id && (l.storeId || 'default') === store.storeId && l.employeeId === employeeId && l.dateKey === dateKey)
+      .reduce((sum, l) => sum + (Number(l.hours) || 0), 0);
+    if (Math.round((existingDayHours + hours) * 100) / 100 > MAX_DAILY_HOURS) {
+      return res.status(400).json({
+        error: `Tổng giờ làm của ${emp.name} ngày ${dateKey} sẽ vượt quá ${MAX_DAILY_HOURS} giờ (các ca khác: ${Math.round(existingDayHours * 100) / 100} giờ)`
+      });
+    }
+
+    db.timeLogs[idx] = {
+      ...db.timeLogs[idx],
+      employeeId: emp.id,
+      employeeName: emp.name,
+      dateKey,
+      startTime,
+      endTime,
+      hours,
+      note,
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.user.username
+    };
+    writeDb(db);
+    res.json(db.timeLogs[idx]);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.delete('/api/timelogs/:id', requireAdmin, async (req, res) => {
+  try {
+    const store = await resolveTargetStore(req);
+    const id = req.params.id;
+    if (GAS_URL) {
+      return res.json(await gasPost({ action: 'deleteTimeLog', spreadsheetId: store.spreadsheetId, id }));
+    }
+    const db = readDb();
+    db.timeLogs = (db.timeLogs || []).filter((l) => !(l.id === id && (l.storeId || 'default') === store.storeId));
+    writeDb(db);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 app.get('/download/raumamix-printer.apk', (_req, res) => {
   if (!fs.existsSync(APK_PATH)) {
     return res.status(404).send('APK not found');

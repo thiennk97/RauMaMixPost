@@ -15,11 +15,12 @@ import {
   Users
 } from 'lucide-vue-next';
 import { api, formatVnd, getTodayStr, shiftDateStr, getAdminToken, setAdminToken, getSavedUser, setSavedUser, groupOrdersByShift } from '../api.js';
+import AdminTimekeepingView from './AdminTimekeepingView.vue';
 
 const adminUser = ref(getSavedUser());
 const isSuperAdmin = computed(() => adminUser.value?.role === 'superadmin');
 const isStaffOnly = computed(() => adminUser.value?.role === 'staff');
-const adminTab = ref('revenue'); // 'revenue' | 'manage'
+const adminTab = ref('revenue'); // 'revenue' | 'timekeeping' | 'manage'
 
 const stores = ref([]);
 const usersList = ref([]);
@@ -579,11 +580,14 @@ onMounted(() => {
         <span>Rau Má Mix · {{ isSuperAdmin ? 'Super Admin' : adminUser.storeName || 'Admin' }}</span>
       </div>
 
-      <nav v-if="isSuperAdmin" class="nav-tabs">
+      <nav class="nav-tabs">
         <button class="nav-tab" :class="{ active: adminTab === 'revenue' }" @click="adminTab = 'revenue'">
           <TrendingUp :size="15" /> Doanh thu
         </button>
-        <button class="nav-tab" :class="{ active: adminTab === 'manage' }" @click="adminTab = 'manage'; loadManageData()">
+        <button class="nav-tab" :class="{ active: adminTab === 'timekeeping' }" @click="adminTab = 'timekeeping'">
+          <Clock :size="15" /> Chấm công
+        </button>
+        <button v-if="isSuperAdmin" class="nav-tab" :class="{ active: adminTab === 'manage' }" @click="adminTab = 'manage'; loadManageData()">
           <Store :size="15" /> Quán & Tài khoản
         </button>
       </nav>
@@ -601,8 +605,16 @@ onMounted(() => {
       </div>
     </header>
 
+    <!-- Timekeeping & Payroll Summary -->
+    <AdminTimekeepingView
+      v-if="adminTab === 'timekeeping'"
+      :is-super-admin="isSuperAdmin"
+      :stores="stores"
+      :selected-store-id="selectedStoreId"
+    />
+
     <!-- Super Admin: Stores & Users Management -->
-    <div v-if="isSuperAdmin && adminTab === 'manage'" class="page-container admin-page-container">
+    <div v-else-if="isSuperAdmin && adminTab === 'manage'" class="page-container admin-page-container">
       <div class="two-col">
         <div class="panel card-pad">
           <div class="section-head">

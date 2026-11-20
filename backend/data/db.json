@@ -1021,5 +1021,127 @@
       "note": "",
       "status": "open"
     }
+  ],
+  "employees": [
+    {
+      "id": "EMP-2DADB5",
+      "name": "Ánh",
+      "storeId": "default",
+      "storeName": "Nguyễn Chánh",
+      "active": true,
+      "createdAt": "2026-11-20T09:38:06.094Z"
+    },
+    {
+      "id": "EMP-835FE9",
+      "name": "Diễm",
+      "storeId": "default",
+      "storeName": "Nguyễn Chánh",
+      "active": true,
+      "createdAt": "2026-11-20T09:38:12.574Z"
+    }
+  ],
+  "timeLogs": [
+    {
+      "id": "TL-420A1CD2",
+      "storeId": "default",
+      "storeName": "Nguyễn Chánh",
+      "employeeId": "EMP-2DADB5",
+      "employeeName": "Ánh",
+      "dateKey": "2026-11-20",
+      "startTime": "08:00",
+      "endTime": "13:00",
+      "hours": 5,
+      "note": "Ca sáng",
+      "createdAt": "2026-11-20T09:38:34.675Z",
+      "createdBy": "member"
+    },
+    {
+      "id": "TL-509732CF",
+      "storeId": "default",
+      "storeName": "Nguyễn Chánh",
+      "employeeId": "EMP-835FE9",
+      "employeeName": "Diễm",
+      "dateKey": "2026-11-20",
+      "startTime": "13:00",
+      "endTime": "18:00",
+      "hours": 5,
+      "note": "",
+      "createdAt": "2026-11-20T09:38:54.140Z",
+      "createdBy": "member"
+    },
+    {
+      "id": "TL-D46CAD1A",
+      "storeId": "default",
+      "storeName": "Nguyễn Chánh",
+      "employeeId": "EMP-835FE9",
+      "employeeName": "Diễm",
+      "dateKey": "2026-11-20",
+      "startTime": "18:00",
+      "endTime": "23:00",
+      "hours": 5,
+      "note": "",
+      "createdAt": "2026-11-20T09:39:05.767Z",
+      "createdBy": "member"
+    },
+    {
+      "id": "TL-3F1F71E4",
+      "storeId": "default",
+      "storeName": "Nguyễn Chánh",
+      "employeeId": "EMP-2DADB5",
+      "employeeName": "Ánh",
+      "dateKey": "2026-11-22",
+      "startTime": "08:00",
+      "endTime": "13:00",
+      "hours": 5,
+      "note": "",
+      "createdAt": "2026-11-20T09:43:10.844Z",
+      "createdBy": "member"
+    },
+    {
+      "id": "TL-78460AD6",
+      "storeId": "default",
+      "storeName": "Nguyễn Chánh",
+      "employeeId": "EMP-2DADB5",
+      "employeeName": "Ánh",
+      "dateKey": "2026-11-11",
+      "startTime": "08:00",
+      "endTime": "13:00",
+      "hours": 5,
+      "note": "",
+      "createdAt": "2026-11-20T09:43:16.738Z",
+      "createdBy": "member"
+    }
+  ],
+  "stores": [
+    {
+      "id": "default",
+      "name": "Nguyễn Chánh",
+      "spreadsheetId": "",
+      "active": true,
+      "createdAt": "2026-11-20T09:37:39.554Z"
+    }
+  ],
+  "admins": [
+    {
+      "username": "admin",
+      "password": "0912Thien",
+      "role": "superadmin",
+      "storeId": "*",
+      "active": true
+    },
+    {
+      "username": "nguyenchanh",
+      "password": "123456",
+      "role": "admin",
+      "storeId": "default",
+      "active": true
+    },
+    {
+      "username": "member",
+      "password": "1234JQK@#$",
+      "role": "staff",
+      "storeId": "default",
+      "active": true
+    }
   ]
 }

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
-import { ShoppingBag, BarChart3, Usb, Printer, Loader2, AlertTriangle, LogOut, Settings, X } from 'lucide-vue-next';
+import { ShoppingBag, BarChart3, Clock, Usb, Printer, Loader2, AlertTriangle, LogOut, Settings, X } from 'lucide-vue-next';
 import { api, formatVnd, getSavedUser, setSavedUser, setAdminToken } from './api.js';
 import { pendingCount, failedCount, resumeOrderQueue, retryFailedOrders } from './orderQueue.js';
 import {
@@ -17,6 +17,7 @@ import {
 } from './usbPrinter.js';
 import PosView from './components/PosView.vue';
 import RevenueView from './components/RevenueView.vue';
+import TimekeepingView from './components/TimekeepingView.vue';
 import AdminView from './components/AdminView.vue';
 import LabelPrinter from './components/LabelPrinter.vue';
 import ShiftModal from './components/ShiftModal.vue';
@@ -371,6 +372,9 @@ onUnmounted(() => {
         <button class="nav-tab" :class="{ active: activeTab === 'revenue' }" @click="activeTab = 'revenue'">
           <BarChart3 :size="16" /> Doanh thu hôm nay
         </button>
+        <button class="nav-tab" :class="{ active: activeTab === 'timekeeping' }" @click="activeTab = 'timekeeping'">
+          <Clock :size="16" /> Chấm công
+        </button>
       </nav>
 
       <div class="topbar-right">
@@ -421,10 +425,11 @@ onUnmounted(() => {
       @open-shift="openShiftModal"
     />
     <RevenueView
-      v-else
+      v-else-if="activeTab === 'revenue'"
       @reprint-order="handleReprintOrder"
       @order-cancelled="loadCurrentShift"
     />
+    <TimekeepingView v-else />
   </div>
 
   <ShiftModal
