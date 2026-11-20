@@ -357,7 +357,7 @@ function submitOrder(shouldPrint = true) {
     <!-- Cart Panel -->
     <aside class="panel cart-panel">
       <div
-        style="padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px"
+        style="padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0"
         :style="currentShift ? { background: '#f0fdf4' } : { background: '#fef3c7' }"
       >
         <div style="font-size: 13px; font-weight: 600" :style="currentShift ? { color: '#166534' } : { color: '#92400e' }">

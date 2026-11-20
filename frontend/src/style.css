@@ -163,16 +163,18 @@ button {
   }
 
   .pos-layout {
-    flex: 1;
-    height: auto;
+    flex: 1 1 0%;
+    height: calc(100% - 50px);
+    max-height: calc(100% - 50px);
     min-height: 0;
     min-width: 0;
     overflow: hidden;
   }
 
   .menu-panel {
-    flex: 1;
+    flex: 1 1 0%;
     height: 100%;
+    max-height: 100%;
     min-height: 0;
     min-width: 0;
     overflow-y: auto;
@@ -194,9 +196,12 @@ button {
     max-width: 350px;
     flex-shrink: 0;
     height: 100% !important;
-    min-height: 0;
-    overflow-x: hidden;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
     position: static !important;
+    display: flex;
+    flex-direction: column;
   }
 }
 
@@ -552,9 +557,9 @@ button {
 .cart-panel {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 76px);
-  position: sticky;
-  top: 66px;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
   overflow: hidden;
   min-width: 0;
 }
@@ -565,6 +570,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .cart-header h2 {
@@ -573,14 +579,18 @@ button {
 }
 
 .cart-items {
-  flex: 1;
+  flex: 1 1 0%;
+  min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px 10px 40px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
+  overscroll-behavior-y: contain;
 }
 
 .cart-empty {
