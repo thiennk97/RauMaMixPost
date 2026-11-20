@@ -16,7 +16,6 @@ const allowedMonths = [
 
 const employees = ref([]);
 const logs = ref([]);
-const summary = ref([]);
 const loading = ref(false);
 const submitting = ref(false);
 
@@ -98,6 +97,25 @@ const groupedLogs = computed(() => {
   return Array.from(map.values()).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
 });
 
+const summary = computed(() => {
+  const map = new Map();
+  for (const log of logs.value) {
+    const key = log.employeeId || log.employeeName;
+    if (!map.has(key)) {
+      map.set(key, {
+        employeeId: log.employeeId,
+        employeeName: log.employeeName,
+        totalShifts: 0,
+        totalHours: 0
+      });
+    }
+    const entry = map.get(key);
+    entry.totalShifts += 1;
+    entry.totalHours = Math.round((entry.totalHours + (Number(log.hours) || 0)) * 100) / 100;
+  }
+  return Array.from(map.values()).sort((a, b) => b.totalHours - a.totalHours || a.employeeName.localeCompare(b.employeeName));
+});
+
 const todayHoursByEmp = computed(() => {
   const map = {};
   for (const l of logs.value) {
@@ -108,16 +126,17 @@ const todayHoursByEmp = computed(() => {
   return map;
 });
 
-async function loadData() {
+async function loadData(fetchEmployees = true) {
   loading.value = true;
   try {
     const [empRes, logRes] = await Promise.all([
-      api.getEmployees(),
+      fetchEmployees ? api.getEmployees() : Promise.resolve(null),
       api.getTimeLogs({ month: selectedMonth.value })
     ]);
-    employees.value = empRes.employees || [];
+    if (empRes) {
+      employees.value = empRes.employees || [];
+    }
     logs.value = logRes.logs || [];
-    summary.value = logRes.summary || [];
     if (formEmployeeId.value && !employees.value.some((e) => e.id === formEmployeeId.value)) {
       formEmployeeId.value = '';
     }
@@ -149,17 +168,21 @@ async function handleSubmit() {
   }
   submitting.value = true;
   try {
-    await api.createTimeLog({
+    const created = await api.createTimeLog({
       employeeId: formEmployeeId.value,
       dateKey: formDate.value,
       startTime: formStart.value,
       endTime: formEnd.value,
       note: formNote.value.trim()
     });
+    if (created && created.id && String(created.dateKey || '').startsWith(selectedMonth.value)) {
+      logs.value = [created, ...logs.value].sort(
+        (a, b) => String(b.dateKey).localeCompare(String(a.dateKey)) || String(b.startTime).localeCompare(String(a.startTime))
+      );
+    }
     formNote.value = '';
     toast.value = 'Đã lưu chấm công';
     setTimeout(() => { toast.value = ''; }, 2500);
-    await loadData();
   } catch (err) {
     formError.value = err.message;
   } finally {
@@ -255,7 +278,7 @@ onMounted(loadData);
             <Calendar :size="17" /> Tổng giờ tháng {{ selectedMonth }}
           </h3>
           <div style="display: flex; gap: 6px; align-items: center">
-            <select v-model="selectedMonth" class="input-sm" style="width: auto" @change="filterDate = ''; loadData()">
+            <select v-model="selectedMonth" class="input-sm" style="width: auto" @change="filterDate = ''; loadData(false)">
               <option v-for="m in allowedMonths" :key="m.value" :value="m.value">{{ m.label }}</option>
             </select>
             <button class="btn btn-outline btn-sm" :disabled="loading" @click="loadData">

@@ -16,7 +16,6 @@ const hourlyRate = ref(0);
 
 const employees = ref([]);
 const logs = ref([]);
-const summary = ref([]);
 const loading = ref(false);
 const deletingLogId = ref('');
 const filterEmployeeId = ref('');
@@ -80,6 +79,27 @@ const groupedLogs = computed(() => {
   return Array.from(map.values()).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
 });
 
+const summary = computed(() => {
+  const map = new Map();
+  for (const log of logs.value) {
+    const key = log.employeeId || log.employeeName;
+    if (!map.has(key)) {
+      map.set(key, {
+        employeeId: log.employeeId,
+        employeeName: log.employeeName,
+        storeId: log.storeId || 'default',
+        storeName: log.storeName || '',
+        totalShifts: 0,
+        totalHours: 0
+      });
+    }
+    const entry = map.get(key);
+    entry.totalShifts += 1;
+    entry.totalHours = Math.round((entry.totalHours + (Number(log.hours) || 0)) * 100) / 100;
+  }
+  return Array.from(map.values()).sort((a, b) => b.totalHours - a.totalHours || a.employeeName.localeCompare(b.employeeName));
+});
+
 const totalMonthHours = computed(() => {
   return Math.round(summary.value.reduce((s, item) => s + (Number(item.totalHours) || 0), 0) * 100) / 100;
 });
@@ -106,7 +126,6 @@ async function loadData() {
     ]);
     employees.value = empRes.employees || [];
     logs.value = logRes.logs || [];
-    summary.value = logRes.summary || [];
   } catch (err) {
     alert(err.message);
   } finally {
@@ -128,12 +147,14 @@ async function handleAddEmployee() {
   }
   empLoading.value = true;
   try {
-    await api.createEmployee({
+    const created = await api.createEmployee({
       name,
       ...(props.isSuperAdmin ? { storeId: localStoreId.value } : {})
     });
+    if (created && created.id) {
+      employees.value = [...employees.value, created].sort((a, b) => a.name.localeCompare(b.name));
+    }
     newEmpName.value = '';
-    await loadData();
   } catch (err) {
     empError.value = err.message;
   } finally {
@@ -145,11 +166,11 @@ async function toggleEmployeeActive(emp) {
   if (togglingEmpId.value || deletingEmpId.value) return;
   togglingEmpId.value = emp.id;
   try {
-    await api.updateEmployee(emp.id, {
+    const updated = await api.updateEmployee(emp.id, {
       active: emp.active === false,
       ...(props.isSuperAdmin ? { storeId: emp.storeId || localStoreId.value } : {})
     });
-    await loadData();
+    employees.value = employees.value.map((e) => (e.id === emp.id ? { ...e, ...updated } : e));
   } catch (err) {
     alert(err.message);
   } finally {
@@ -163,7 +184,7 @@ async function handleDeleteEmployee(emp) {
   deletingEmpId.value = emp.id;
   try {
     await api.deleteEmployee(emp.id, props.isSuperAdmin ? (emp.storeId || localStoreId.value) : '');
-    await loadData();
+    employees.value = employees.value.filter((e) => e.id !== emp.id);
   } catch (err) {
     alert(err.message);
   } finally {
@@ -221,12 +242,22 @@ async function handleSaveLog() {
       ...(storeParam && storeParam !== 'all' ? { storeId: storeParam } : {})
     };
     if (editingLogId.value) {
-      await api.updateTimeLog(editingLogId.value, payload);
+      const updated = await api.updateTimeLog(editingLogId.value, payload);
+      if (String(updated.dateKey || '').startsWith(selectedMonth.value)) {
+        logs.value = logs.value.map((l) => (l.id === editingLogId.value ? { ...l, ...updated } : l));
+      } else {
+        logs.value = logs.value.filter((l) => l.id !== editingLogId.value);
+      }
     } else {
-      await api.createTimeLog(payload);
+      const created = await api.createTimeLog(payload);
+      if (created && created.id && String(created.dateKey || '').startsWith(selectedMonth.value)) {
+        logs.value = [created, ...logs.value];
+      }
     }
+    logs.value = [...logs.value].sort(
+      (a, b) => String(b.dateKey).localeCompare(String(a.dateKey)) || String(b.startTime).localeCompare(String(a.startTime))
+    );
     showLogModal.value = false;
-    await loadData();
   } catch (err) {
     logError.value = err.message;
   } finally {
@@ -240,7 +271,7 @@ async function handleDeleteLog(log) {
   deletingLogId.value = log.id;
   try {
     await api.deleteTimeLog(log.id, props.isSuperAdmin ? (log.storeId || localStoreId.value) : '');
-    await loadData();
+    logs.value = logs.value.filter((l) => l.id !== log.id);
   } catch (err) {
     alert(err.message);
   } finally {

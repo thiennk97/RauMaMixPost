@@ -183,11 +183,14 @@ async function toggleStoreActive(st) {
   }
 }
 
+const deletingStoreId = ref('');
+
 async function handleDeleteStore(st) {
-  if (st.id === 'default') return;
+  if (st.id === 'default' || deletingStoreId.value) return;
   if (!confirm(`Xác nhận xóa quán "${st.name}"?\n\nLưu ý: File Google Sheet của quán và các tài khoản liên quan sẽ bị xóa!`)) {
     return;
   }
+  deletingStoreId.value = st.id;
   try {
     await api.deleteStore(st.id);
     if (selectedStoreId.value === st.id) {
@@ -196,6 +199,8 @@ async function handleDeleteStore(st) {
     await loadManageData();
   } catch (err) {
     alert(err.message);
+  } finally {
+    deletingStoreId.value = '';
   }
 }
 
@@ -649,8 +654,14 @@ onMounted(() => {
                 <button class="btn btn-sm" :class="st.active ? 'btn-primary' : 'btn-outline'" @click="toggleStoreActive(st)">
                   {{ st.active ? 'Đang mở' : 'Tạm ngưng' }}
                 </button>
-                <button v-if="st.id !== 'default'" class="btn btn-danger-soft btn-sm" @click="handleDeleteStore(st)">
-                  Xóa
+                <button
+                  v-if="st.id !== 'default'"
+                  class="btn btn-danger-soft btn-sm"
+                  :disabled="deletingStoreId === st.id"
+                  @click="handleDeleteStore(st)"
+                >
+                  <Loader2 v-if="deletingStoreId === st.id" :size="13" class="spin" />
+                  {{ deletingStoreId === st.id ? 'Đang xóa...' : 'Xóa' }}
                 </button>
               </div>
             </div>
