@@ -139,7 +139,7 @@ onMounted(loadRevenue);
         <h3 style="margin: 0 0 12px; font-size: 15px">Theo thanh toán & kênh bán</h3>
         <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px">
           <div v-for="(val, key) in data.byPaymentMethod" :key="key" class="summary-line">
-            <span>{{ key }}</span>
+            <span>{{ key === 'Tiền mặt' ? 'Tiền mặt (vào két)' : key }}</span>
             <b>{{ formatVnd(val) }}</b>
           </div>
           <hr style="border: none; border-top: 1px solid var(--border); margin: 4px 0" />

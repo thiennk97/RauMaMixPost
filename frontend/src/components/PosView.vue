@@ -49,6 +49,8 @@ const cart = computed({
     cartsByChannel.value[orderType.value] = val;
   }
 });
+const PAYMENT_METHODS = ['Tiền mặt', 'Chuyển khoản'];
+const isAppChannel = computed(() => orderType.value !== 'Mang về');
 const paymentMethod = ref('Tiền mặt');
 const cashReceived = ref(0);
 const submitting = ref(false);
@@ -225,7 +227,7 @@ function submitOrder(shouldPrint = true) {
   const channel = orderType.value;
   const submittedItems = cart.value.map((it) => ({ ...it }));
   const total = cartTotal.value;
-  const pm = paymentMethod.value;
+  const pm = isAppChannel.value ? 'App giao hàng' : paymentMethod.value;
   const cash = pm === 'Tiền mặt' && cashReceived.value > 0 ? cashReceived.value : total;
   const nowIso = new Date().toISOString();
 
@@ -244,7 +246,10 @@ function submitOrder(shouldPrint = true) {
 
   // Xóa giỏ & in tem ngay lập tức, không chờ Google Sheet
   cartsByChannel.value[channel] = [];
-  if (channel === orderType.value) cashReceived.value = 0;
+  if (channel === orderType.value) {
+    cashReceived.value = 0;
+    paymentMethod.value = 'Tiền mặt';
+  }
   toast.value = `Đã tạo đơn ${order.orderCode} (${formatVnd(order.total)})`;
   setTimeout(() => { toast.value = ''; }, 3000);
   emit('order-created', { order, shouldPrint });
@@ -404,6 +409,27 @@ function submitOrder(shouldPrint = true) {
           <span class="summary-total">{{ formatVnd(cartTotal) }}</span>
         </div>
 
+        <div v-if="!isAppChannel" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px">
+          <button
+            v-for="pm in PAYMENT_METHODS"
+            :key="pm"
+            type="button"
+            class="pill"
+            :class="{ active: paymentMethod === pm }"
+            style="padding: 8px 10px; font-size: 13px; text-align: center"
+            :disabled="submitting"
+            @click="paymentMethod = pm"
+          >
+            {{ pm }}
+          </button>
+        </div>
+        <div
+          v-else
+          style="font-size: 12px; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; text-align: center"
+        >
+          Thanh toán qua App · Không cộng vào két
+        </div>
+
         <button
           class="btn btn-primary"
           style="width: 100%; padding: 13px 16px; font-size: 16px"
@@ -447,6 +473,9 @@ function submitOrder(shouldPrint = true) {
             <b>{{ formatVnd(item.unitPrice * item.quantity) }}</b>
           </div>
         </div>
+
+        <!-- Spacer đệm đáy để vuốt các món cuối lên cao khỏi viền màn hình POS -->
+        <div style="height: 120px; flex-shrink: 0;" aria-hidden="true"></div>
       </div>
     </aside>
   </div>

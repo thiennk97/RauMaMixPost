@@ -62,7 +62,22 @@ const cashDiff = computed(() => {
 });
 
 const cashSales = computed(() => {
-  return Number(props.currentShift?.byPaymentMethod?.['Tiền mặt'] || 0);
+  return Number(props.currentShift?.cashSales ?? props.currentShift?.byPaymentMethod?.['Tiền mặt'] ?? 0);
+});
+
+const transferSales = computed(() => {
+  return Number(props.currentShift?.byPaymentMethod?.['Chuyển khoản'] || 0);
+});
+
+const appSales = computed(() => {
+  return Number(props.currentShift?.byPaymentMethod?.['App giao hàng'] || 0);
+});
+
+const appBreakdown = computed(() => {
+  const byType = props.currentShift?.byOrderType || {};
+  return ['Shopee', 'Grab', 'Be', 'Xanh']
+    .map((name) => ({ name, amount: Number(byType[name] || 0) }))
+    .filter((item) => item.amount > 0);
 });
 
 function formatTime(iso) {
@@ -197,26 +212,43 @@ async function handleCloseShift() {
           </div>
         </div>
 
-        <div v-if="Object.keys(currentShift.byPaymentMethod || {}).length" style="border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px">
-          <div style="font-weight: 600; margin-bottom: 2px">Theo phương thức thanh toán</div>
-          <div v-for="(val, key) in currentShift.byPaymentMethod" :key="key" class="summary-line">
-            <span>{{ key }}</span>
-            <b>{{ formatVnd(val) }}</b>
-          </div>
-        </div>
-
         <div style="border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px">
+          <div style="font-weight: 600; margin-bottom: 2px">Tiền mặt vào két</div>
           <div class="summary-line">
             <span>Tiền đầu ca</span>
             <span>{{ formatVnd(currentShift.openingCash) }}</span>
           </div>
           <div class="summary-line">
-            <span>Bán tiền mặt trong ca</span>
+            <span>Mang về · Tiền mặt</span>
             <span>+ {{ formatVnd(cashSales) }}</span>
           </div>
-          <div class="summary-line" style="font-weight: 700">
+          <div class="summary-line" style="font-weight: 700; border-top: 1px dashed var(--border); padding-top: 6px">
             <span>Tiền mặt dự kiến trong két</span>
-            <span>{{ formatVnd(currentShift.expectedCash) }}</span>
+            <span style="color: var(--primary)">{{ formatVnd(currentShift.expectedCash) }}</span>
+          </div>
+        </div>
+
+        <div
+          v-if="transferSales > 0 || appSales > 0"
+          style="border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; background: #f8fafc"
+        >
+          <div style="font-weight: 600; margin-bottom: 2px">Tiền không vào két (đối chiếu)</div>
+          <div v-if="transferSales > 0" class="summary-line">
+            <span>Mang về · Chuyển khoản</span>
+            <b>{{ formatVnd(transferSales) }}</b>
+          </div>
+          <div v-if="appSales > 0" class="summary-line">
+            <span>App giao hàng</span>
+            <b>{{ formatVnd(appSales) }}</b>
+          </div>
+          <div
+            v-for="app in appBreakdown"
+            :key="app.name"
+            class="summary-line"
+            style="font-size: 12px; color: var(--text-muted); padding-left: 10px"
+          >
+            <span>↳ {{ app.name }}</span>
+            <span>{{ formatVnd(app.amount) }}</span>
           </div>
         </div>
 

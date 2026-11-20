@@ -232,10 +232,20 @@ async function triggerPrint(order, previewOnly = false) {
 function handleOrderCreated({ order, shouldPrint }) {
   // Cập nhật tạm số đơn & doanh thu ca ngay trên giao diện; khi lưu ngầm xong sẽ tự đồng bộ lại từ server
   if (currentShift.value) {
+    const total = Number(order.total) || 0;
+    const pm = order.paymentMethod || 'Tiền mặt';
+    const ot = order.orderType || 'Mang về';
+    const isCashInDrawer = ot === 'Mang về' && pm === 'Tiền mặt';
+    const prevByPay = currentShift.value.byPaymentMethod || {};
+    const prevByType = currentShift.value.byOrderType || {};
     currentShift.value = {
       ...currentShift.value,
       totalOrders: (Number(currentShift.value.totalOrders) || 0) + 1,
-      totalRevenue: (Number(currentShift.value.totalRevenue) || 0) + (Number(order.total) || 0)
+      totalRevenue: (Number(currentShift.value.totalRevenue) || 0) + total,
+      cashSales: (Number(currentShift.value.cashSales) || 0) + (isCashInDrawer ? total : 0),
+      expectedCash: (Number(currentShift.value.expectedCash) || 0) + (isCashInDrawer ? total : 0),
+      byPaymentMethod: { ...prevByPay, [pm]: (Number(prevByPay[pm]) || 0) + total },
+      byOrderType: { ...prevByType, [ot]: (Number(prevByType[ot]) || 0) + total }
     };
   }
   if (shouldPrint) {

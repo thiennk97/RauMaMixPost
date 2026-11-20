@@ -837,7 +837,7 @@ onMounted(() => {
           <div v-else class="progress-list">
             <div v-for="item in paymentEntries" :key="item.name" class="progress-item">
               <div class="summary-line" style="font-size: 14px">
-                <span>{{ item.name }} <span style="color: var(--text-muted)">({{ item.pct }}%)</span></span>
+                <span>{{ item.name === 'Tiền mặt' ? 'Tiền mặt (vào két)' : item.name }} <span style="color: var(--text-muted)">({{ item.pct }}%)</span></span>
                 <b>{{ formatVnd(item.amount) }}</b>
               </div>
               <div class="progress-track">
@@ -853,7 +853,7 @@ onMounted(() => {
           <div v-else class="progress-list">
             <div v-for="item in orderTypeEntries" :key="item.name" class="progress-item">
               <div class="summary-line" style="font-size: 14px">
-                <span>{{ item.name }} <span style="color: var(--text-muted)">({{ item.pct }}%)</span></span>
+                <span>{{ item.name === 'Tiền mặt' ? 'Tiền mặt (vào két)' : item.name }} <span style="color: var(--text-muted)">({{ item.pct }}%)</span></span>
                 <b>{{ formatVnd(item.amount) }}</b>
               </div>
               <div class="progress-track">

@@ -580,17 +580,18 @@ button {
 
 .cart-items {
   flex: 1 1 0%;
+  height: 0;
   min-height: 0;
-  max-height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 10px 40px;
+  padding: 10px 10px 140px !important;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  overscroll-behavior-y: contain;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .cart-empty {
@@ -609,6 +610,10 @@ button {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  flex-shrink: 0;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .cart-item-top {

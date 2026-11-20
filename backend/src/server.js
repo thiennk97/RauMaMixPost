@@ -660,25 +660,44 @@ app.get('/api/orders', requireAuth, async (req, res) => {
   }
 });
 
+const APP_CHANNELS = new Set(['Shopee', 'Grab', 'Be', 'Xanh']);
+
+function normalizeOrderPaymentMethod(order) {
+  const ot = String(order?.orderType || 'Mang về');
+  if (APP_CHANNELS.has(ot)) return 'App giao hàng';
+  return String(order?.paymentMethod || 'Tiền mặt');
+}
+
+function isCashInDrawerOrder(order) {
+  const ot = String(order?.orderType || 'Mang về');
+  return !APP_CHANNELS.has(ot) && normalizeOrderPaymentMethod(order) === 'Tiền mặt';
+}
+
 function computeLocalShiftStats(db, shift) {
   const shiftOrders = (db.orders || []).filter((o) => o.shiftId === shift.id);
   const completed = shiftOrders.filter((o) => o.status !== 'cancelled');
   const byPaymentMethod = {};
   const byOrderType = {};
   let totalRevenue = 0;
+  let cashSales = 0;
 
   for (const o of completed) {
+    const pm = normalizeOrderPaymentMethod(o);
+    const ot = String(o.orderType || 'Mang về');
     totalRevenue += o.total;
-    byPaymentMethod[o.paymentMethod] = (byPaymentMethod[o.paymentMethod] || 0) + o.total;
-    byOrderType[o.orderType] = (byOrderType[o.orderType] || 0) + o.total;
+    byPaymentMethod[pm] = (byPaymentMethod[pm] || 0) + o.total;
+    byOrderType[ot] = (byOrderType[ot] || 0) + o.total;
+    if (isCashInDrawerOrder(o)) {
+      cashSales += o.total;
+    }
   }
 
-  const cashSales = byPaymentMethod['Tiền mặt'] || 0;
   return {
     ...shift,
     totalOrders: completed.length,
     cancelledOrders: shiftOrders.length - completed.length,
     totalRevenue,
+    cashSales,
     byPaymentMethod,
     byOrderType,
     expectedCash: (Number(shift.openingCash) || 0) + cashSales
@@ -883,6 +902,11 @@ app.post('/api/orders', requirePos, async (req, res) => {
     const total = Math.max(0, subtotal - safeDiscount);
     const safeCash = Number(cashReceived) || total;
 
+    const normalizedOrderType = orderType || 'Mang về';
+    const normalizedPaymentMethod = APP_CHANNELS.has(normalizedOrderType)
+      ? 'App giao hàng'
+      : (paymentMethod || 'Tiền mặt');
+
     const storeOrders = db.orders.filter((o) => (o.storeId || 'default') === store.storeId);
     const order = {
       id: clientId ? String(clientId) : crypto.randomUUID(),
@@ -891,14 +915,14 @@ app.post('/api/orders', requirePos, async (req, res) => {
       orderCode: clientOrderCode ? String(clientOrderCode) : getNextOrderCode(storeOrders, dateKey),
       createdAt: safeNow.toISOString(),
       dateKey,
-      orderType: orderType || 'Tại quán',
-      paymentMethod: paymentMethod || 'Tiền mặt',
+      orderType: normalizedOrderType,
+      paymentMethod: normalizedPaymentMethod,
       items,
       subtotal,
       discount: safeDiscount,
       total,
-      cashReceived: paymentMethod === 'Tiền mặt' ? safeCash : total,
-      changeAmount: paymentMethod === 'Tiền mặt' ? Math.max(0, safeCash - total) : 0,
+      cashReceived: normalizedPaymentMethod === 'Tiền mặt' ? safeCash : total,
+      changeAmount: normalizedPaymentMethod === 'Tiền mặt' ? Math.max(0, safeCash - total) : 0,
       note: String(note || '').trim(),
       status: 'completed',
       shiftId: currentShift.id
@@ -1055,9 +1079,11 @@ app.get('/api/revenue', requireAuth, async (req, res) => {
     const hourlyMap = new Map();
 
     for (const order of completedOrders) {
+      const pm = normalizeOrderPaymentMethod(order);
+      const ot = String(order.orderType || 'Mang về');
       totalRevenue += order.total;
-      byPaymentMethod[order.paymentMethod] = (byPaymentMethod[order.paymentMethod] || 0) + order.total;
-      byOrderType[order.orderType] = (byOrderType[order.orderType] || 0) + order.total;
+      byPaymentMethod[pm] = (byPaymentMethod[pm] || 0) + order.total;
+      byOrderType[ot] = (byOrderType[ot] || 0) + order.total;
       const dayEntry = dailyMap.get(order.dateKey) || { date: order.dateKey, revenue: 0, orders: 0, cups: 0 };
       dayEntry.revenue += order.total;
       dayEntry.orders += 1;

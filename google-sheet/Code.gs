@@ -892,6 +892,16 @@ function serializeShift(r) {
   };
 }
 
+function isAppChannel(orderType) {
+  const ot = String(orderType || '');
+  return ot === 'Shopee' || ot === 'Grab' || ot === 'Be' || ot === 'Xanh';
+}
+
+function normalizePaymentMethod(orderType, paymentMethod) {
+  if (isAppChannel(orderType)) return 'App giao hàng';
+  return String(paymentMethod || 'Tiền mặt');
+}
+
 function computeShiftStats(ss, shift) {
   const today = Utilities.formatDate(new Date(), 'Asia/Ho_Chi_Minh', 'yyyy-MM-dd');
   const from = shift.dateKey || today;
@@ -900,6 +910,7 @@ function computeShiftStats(ss, shift) {
   let totalOrders = 0;
   let cancelledOrders = 0;
   let totalRevenue = 0;
+  let cashSales = 0;
   const byPaymentMethod = {};
   const byOrderType = {};
 
@@ -913,22 +924,25 @@ function computeShiftStats(ss, shift) {
         return;
       }
       const total = Number(r.total) || 0;
-      const pm = String(r.paymentMethod || 'Tiền mặt');
       const ot = String(r.orderType || 'Mang về');
+      const pm = normalizePaymentMethod(ot, r.paymentMethod);
       totalOrders++;
       totalRevenue += total;
       byPaymentMethod[pm] = (byPaymentMethod[pm] || 0) + total;
       byOrderType[ot] = (byOrderType[ot] || 0) + total;
+      if (!isAppChannel(ot) && pm === 'Tiền mặt') {
+        cashSales += total;
+      }
     });
   });
 
-  const cashSales = byPaymentMethod['Tiền mặt'] || 0;
   const expectedCash = (Number(shift.openingCash) || 0) + cashSales;
   return {
     ...shift,
     totalOrders,
     cancelledOrders,
     totalRevenue,
+    cashSales,
     byPaymentMethod,
     byOrderType,
     expectedCash
@@ -987,9 +1001,11 @@ function getRevenuePayload(ss, from, to, shiftId) {
   let totalRevenue = 0, totalCups = 0;
   const byPaymentMethod = {}, byOrderType = {}, prodMap = {}, dailyMap = {}, hourlyMap = {};
   completed.forEach(o => {
+    const ot = String(o.orderType || 'Mang về');
+    const pm = normalizePaymentMethod(ot, o.paymentMethod);
     totalRevenue += o.total;
-    byPaymentMethod[o.paymentMethod] = (byPaymentMethod[o.paymentMethod] || 0) + o.total;
-    byOrderType[o.orderType] = (byOrderType[o.orderType] || 0) + o.total;
+    byPaymentMethod[pm] = (byPaymentMethod[pm] || 0) + o.total;
+    byOrderType[ot] = (byOrderType[ot] || 0) + o.total;
     if (!dailyMap[o.dateKey]) dailyMap[o.dateKey] = { date: o.dateKey, revenue: 0, orders: 0, cups: 0 };
     dailyMap[o.dateKey].revenue += o.total;
     dailyMap[o.dateKey].orders += 1;
@@ -1637,13 +1653,14 @@ function doPost(e) {
       const todayCount = rows.filter(r => formatDateKey(r.dateKey) === dateKey).length;
       const items = body.items || [];
       const subtotal = items.reduce((s, it) => s + Number(it.unitPrice) * Number(it.quantity), 0);
+      const orderType = body.orderType || 'Mang về';
       const order = {
         id: clientId || Utilities.getUuid(),
         orderCode: body.orderCode ? String(body.orderCode) : '#' + String(todayCount + 1).padStart(3, '0'),
         createdAt: now.toISOString(),
         dateKey,
-        orderType: body.orderType || 'Mang về',
-        paymentMethod: body.paymentMethod || 'Tiền mặt',
+        orderType,
+        paymentMethod: normalizePaymentMethod(orderType, body.paymentMethod),
         items,
         total: subtotal,
         note: body.note || '',
