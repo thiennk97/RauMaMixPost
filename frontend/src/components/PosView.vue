@@ -523,7 +523,7 @@ function submitOrder(shouldPrint = true) {
         </div>
       </div>
 
-      <div class="option-section">
+      <div class="option-section note-section">
         <h4>Ghi chú trên tem</h4>
         <input v-model="optNote" type="text" class="input-sm" placeholder="VD: Ít sữa, để riêng đá..." />
       </div>

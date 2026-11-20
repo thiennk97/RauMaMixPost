@@ -820,98 +820,125 @@ button {
   border-radius: 6px;
 }
 
-/* Touch-friendly Customize Drink Modal (wide, zero-scroll on landscape POS) */
+/* Touch-friendly Customize Drink Modal (auto-scales with viewport height, zero-scroll) */
 .modal.customize-modal {
-  max-width: 960px;
-  width: 96vw;
-  padding: 16px 20px;
-  gap: 12px;
-  border-radius: 16px;
+  max-width: min(840px, 92vw);
+  width: 90vw;
+  max-height: 82vh;
+  padding: 10px 16px;
+  gap: 6px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.customize-modal .modal-header {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
 }
 
 .customize-modal .modal-header h3 {
-  font-size: 19px;
+  font-size: 16px;
+  margin: 0;
+  line-height: 1.25;
 }
 
 .customize-close-btn {
-  width: 38px;
-  height: 38px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 8px;
   flex-shrink: 0;
 }
 
 .customize-row-2col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 12px;
   align-items: start;
 }
 
 .customize-modal .option-section h4 {
-  font-size: 13px;
+  font-size: 11.5px;
   font-weight: 700;
-  margin: 0 0 6px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin: 0 0 3px;
 }
 
 .customize-modal .option-chips {
-  gap: 8px;
+  gap: 5px;
 }
 
 .customize-modal .chip {
-  padding: 10px 15px;
-  font-size: 14.5px;
-  border-radius: 10px;
-  min-height: 42px;
-}
-
-.customize-modal .option-chips.topping-chips {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.customize-modal .option-chips.topping-chips .chip {
-  padding: 9px 10px;
-  font-size: 13.5px;
-  border-radius: 10px;
-  min-height: 42px;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  border-radius: 8px;
+  transition: all 0.15s ease;
 }
 
 .customize-modal .option-chips.size-chips {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .customize-modal .option-chips.size-chips .chip {
-  min-height: 52px;
-  font-size: 17px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 14px;
   font-weight: 700;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.customize-modal .option-chips.topping-chips {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.customize-modal .option-chips.topping-chips .chip {
+  padding: 0 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  min-height: 29px;
+  height: 29px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .customize-modal .option-chips.level-chips {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
+  gap: 5px;
 }
 
 .customize-modal .option-chips.level-chips .chip {
-  padding: 10px 4px;
+  padding: 0 4px;
+  min-height: 30px;
+  height: 30px;
+  font-size: 12.5px;
+  font-weight: 600;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .customize-modal .input-sm {
-  padding: 10px 14px;
-  font-size: 14.5px;
-  min-height: 42px;
-  border-radius: 10px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  min-height: 31px;
+  height: 31px;
+  border-radius: 7px;
 }
 
 .customize-footer {
@@ -919,22 +946,24 @@ button {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding-top: 8px;
+  padding-top: 5px;
   border-top: 1px solid var(--border);
+  margin-top: 1px;
 }
 
 .customize-qty .qty-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 33px;
+  height: 33px;
+  border-radius: 8px;
 }
 
 .customize-submit-btn {
-  padding: 11px 28px;
-  font-size: 16px;
+  padding: 0 20px;
+  font-size: 14px;
   font-weight: 700;
-  min-height: 46px;
-  border-radius: 12px;
+  min-height: 36px;
+  height: 36px;
+  border-radius: 8px;
 }
 
 @media (max-width: 760px) {
@@ -944,7 +973,14 @@ button {
   }
 
   .customize-modal .option-chips.topping-chips {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-height: 520px) {
+  .modal.customize-modal {
+    max-height: 94vh;
+    overflow-y: auto;
   }
 }
 
